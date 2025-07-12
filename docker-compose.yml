@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "6543:5432"
+
+  dendrite:
+    image: matrixdotorg/dendrite-monolith:latest
+    restart: unless-stopped
+    depends_on: [postgres]
+    environment:
+      DENDRITE_SERVER_NAME: matrix.pension.test
+      DENDRITE_DATABASE_TYPE: postgres
+      DENDRITE_DATABASE_CONNECTION_STRING: postgres://workplace:password@postgres:5432/workplace?sslmode=disable
+      DENDRITE_CLIENT_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_FEDERATION_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_MEDIA_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_SYNC_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_KEY_SERVER_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_USER_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_ROOM_SERVER_API_LISTEN_ADDRESS: 0.0.0.0:8008
+      DENDRITE_INTERNAL_API_LISTEN_ADDRESS: 0.0.0.0:8008
+    volumes:
+      - ./dendrite_config:/etc/dendrite:ro
+      - ./dendrite_data:/data
+    expose:
+      - "8008"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on: [postgres]
+    environment:
+      DATABASE_URL: postgres://workplace:password@postgres:5432/workplace
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+
+  ui:
+    build: ./ui
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./ui:/usr/src/app
+      - /usr/src/app/node_modules
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on: [dendrite, ui, backend]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+
+volumes:
+  pg_data: 
