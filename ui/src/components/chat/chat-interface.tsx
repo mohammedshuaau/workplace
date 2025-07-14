@@ -31,6 +31,7 @@ interface Message {
             name: string
         }
     }
+    isEdited?: boolean
 }
 
 interface FileItem {
@@ -78,18 +79,33 @@ interface Chat {
     messages: Message[]
     files: FileItem[]
     media: MediaItem[]
+    typingUsers?: string[]
 }
 
 interface ChatInterfaceProps {
     chats: Chat[]
     selectedChatId?: string
     onChatSelect: (chatId: string) => void
+    onSendMessage?: (content: string, replyTo?: string) => Promise<void>
+    onEditMessage?: (eventId: string, newContent: string) => Promise<void>
+    onDeleteMessage?: (eventId: string) => Promise<void>
+    onTyping?: (isTyping: boolean) => Promise<void>
+    onNewChat?: () => void
+    onRefresh?: () => void
+    showConnectionStatus?: boolean
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     chats,
     selectedChatId,
     onChatSelect,
+    onSendMessage,
+    onEditMessage,
+    onDeleteMessage,
+    onTyping,
+    onNewChat,
+    onRefresh,
+    showConnectionStatus = false,
 }) => {
     const [messageInput, setMessageInput] = React.useState('')
     const [replyTo, setReplyTo] = React.useState<Message | null>(null)
@@ -104,11 +120,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     const selectedChat = chats.find(chat => chat.id === selectedChatId)
 
-    const handleSendMessage = () => {
+    const handleSendMessage = async () => {
         if (!messageInput.trim() || !selectedChat) return
 
-        // In a real app, this would send to the server
-        console.log('Sending message:', messageInput)
+        if (editingMessage && onEditMessage) {
+            // Edit existing message
+            await onEditMessage(editingMessage.id, messageInput)
+            setEditingMessage(null)
+        } else if (onSendMessage) {
+            // Send new message
+            await onSendMessage(messageInput, replyTo?.id)
+        } else {
+            // Fallback to console log for demo
+
+        }
+
         setMessageInput('')
         setReplyTo(null)
     }
@@ -158,18 +184,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setShowDeleteDialog(true)
     }
 
-    const confirmDelete = () => {
-        if (messageToDelete) {
-            // In a real app, this would delete from the server
-            console.log('Deleting message:', messageToDelete)
-            setShowDeleteDialog(false)
-            setMessageToDelete(null)
+    const confirmDelete = async () => {
+        if (messageToDelete && onDeleteMessage) {
+            try {
+                await onDeleteMessage(messageToDelete)
+                setShowDeleteDialog(false)
+                setMessageToDelete(null)
+            } catch (error) {
+                console.error('Failed to delete message:', error)
+                // You could show a toast notification here
+            }
         }
     }
 
     const handleReact = (messageId: string, emoji: string) => {
         // In a real app, this would send reaction to the server
-        console.log('Reacting to message:', messageId, 'with emoji:', emoji)
+
     }
 
     return (
@@ -179,6 +209,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 chats={chats}
                 selectedChatId={selectedChatId}
                 onChatSelect={onChatSelect}
+                onNewChat={onNewChat}
+                onRefresh={onRefresh}
+                showConnectionStatus={showConnectionStatus}
             />
 
             {/* Main chat area */}
@@ -291,17 +324,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                     )}
 
                                     {/* Typing indicator */}
-                                    <div className="border-t bg-background px-4 py-2">
-                                        <div className="text-sm text-muted-foreground italic">
-                                            John Doe is typing...
+                                    {selectedChat.typingUsers && selectedChat.typingUsers.length > 0 && (
+                                        <div className="border-t bg-background px-4 py-2">
+                                            <div className="text-sm text-muted-foreground italic">
+                                                {selectedChat.typingUsers.length === 1
+                                                    ? `${selectedChat.typingUsers[0]} is typing...`
+                                                    : `${selectedChat.typingUsers.join(', ')} are typing...`
+                                                }
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Input area */}
                                     <ChatInput
                                         value={messageInput}
                                         onChange={setMessageInput}
                                         onSend={handleSendMessage}
+                                        onTyping={onTyping}
                                         replyTo={replyTo ? {
                                             id: replyTo.id,
                                             content: replyTo.content,

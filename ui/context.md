@@ -248,6 +248,27 @@ The chat includes extensive sample data with:
     - **Media**: Shows all images, videos, and audio shared in the chat, with sender info, sent date/time, media preview, download, and play (for audio/video).
 - Only the Chat tab displays the message input and typing indicator at the bottom; Files and Media tabs are for browsing shared content.
 - The chat area layout is now fully responsive and scrollable, with the input always visible at the bottom of the Chat tab.
+
+### Update (2024-12-19)
+- **Chat Sidebar Options Menu**: Added a three-dots icon next to the "Chats" heading that opens a popover menu with:
+  - **Refresh Chats** button with refresh icon for reloading chat history
+  - **Connection Status** embedded component showing Matrix server status, error messages, and reconnect/test connection options
+- **Clean UI**: Removed the refresh button and connection status from the top-right corner of the home page
+- **Code Cleanup**: Removed all console.log statements from the codebase for production-ready code
+- **Enhanced Connection Status**: Created `ConnectionStatusEmbedded` component that can be used inside other popovers without creating nested popovers
+- **Improved UX**: The options menu only appears when refresh or connection status functions are available, keeping the UI clean when not needed
+
+### Update (2024-12-19) - Matrix Message Editing
+- **Real Matrix Edit Implementation**: Implemented proper Matrix protocol message editing using `m.relates_to.rel_type: 'm.replace'` and `m.new_content` structures
+- **Server-Side Edits**: Edit events are sent to Matrix server with proper Matrix specification compliance
+- **Cross-Client Compatibility**: Edit relationships are stored on Matrix server and visible to other Matrix clients (Element, etc.)
+- **Message Ordering Fix**: Fixed message display order to show messages chronologically (oldest first) instead of reversed
+- **Edit Event Handling**: Properly merge edit events with original messages during room data loading to prevent duplicates
+- **UI Edit Indicators**: Added "(edited)" indicator next to timestamp for edited messages
+- **Edit State Management**: Chat interface handles edit mode with proper state management and input field reuse
+- **Reply Preservation**: Edit functionality preserves reply relationships when editing replied messages
+- **Real-time Edit Updates**: Edited messages update in real-time across all connected clients
+- **Matrix Protocol Compliance**: Uses official Matrix specification for message editing with proper event relationships
 - Data structures for files and media have been added to each chat object.
 
 ## Last Updated
@@ -258,7 +279,11 @@ The chat includes extensive sample data with:
 - Import aliases setup
 - Chat UI development completed with full feature set
 - Enhanced chat features: reactions, edit mode, seen indicators with popovers, full-screen layout
-- Complete chat interface with message bubbles, sidebar, input, reactions, replies, edit mode, and smooth scrolling 
+- Complete chat interface with message bubbles, sidebar, input, reactions, replies, edit mode, and smooth scrolling
+- Authentication verification via `/auth/me` endpoint for secure token validation
+- Matrix authentication integration with automatic storage and retrieval
+- Matrix/Dendrite real-time messaging integration with live chat functionality
+- New chat modal with user search and direct message creation 
 
 ## Authentication System
 
@@ -293,9 +318,10 @@ src/
 
 #### Auth Service (`src/services/auth.ts`)
 - **TanStack Query mutations** for login, register, and logout
-- **Type-safe interfaces** for User, LoginCredentials, RegisterCredentials
-- **Local storage management** for tokens and user data
-- **Authentication state helpers** (isAuthenticated, getCurrentUser, getToken)
+- **TanStack Query hook** for `/auth/me` endpoint to verify authentication
+- **Type-safe interfaces** for User, LoginCredentials, RegisterCredentials, MatrixAuth
+- **Local storage management** for tokens, user data, and Matrix authentication
+- **Authentication state helpers** (isAuthenticated, getCurrentUser, getToken, getMatrixAuth)
 
 ### Authentication Pages
 
@@ -314,8 +340,9 @@ src/
 - **shadcn/ui components** with Tailwind styling
 
 ### API Endpoints
-- **POST** `/auth/login` - User login with email/password
-- **POST** `/auth/register` - User registration with name/email/password/role
+- **POST** `/auth/login` - User login with email/password (returns Matrix auth data)
+- **POST** `/auth/register` - User registration with name/email/password/role (returns Matrix auth data)
+- **GET** `/auth/me` - Verify authentication status and get current user data
 
 ### Data Structures
 ```typescript
@@ -324,6 +351,13 @@ interface User {
   email: string;
   name: string;
   role: 'USER' | 'ADMIN';
+}
+
+interface MatrixAuth {
+  userId: string;
+  accessToken: string;
+  deviceId: string;
+  serverUrl: string;
 }
 
 interface LoginCredentials {
@@ -342,6 +376,7 @@ interface AuthResponse {
   message: string;
   user: User;
   token: string;
+  matrix?: MatrixAuth;
 }
 ```
 
@@ -352,6 +387,7 @@ interface AuthResponse {
 - **DevTools** for debugging API calls
 - **Optimistic updates** capability
 - **Type-safe** mutations and queries
+- **Authentication verification** via `/auth/me` endpoint on app startup
 
 ### Router Integration
 - **Routes registered** in `src/lib/router.tsx`
@@ -389,32 +425,45 @@ interface AuthResponse {
 3. **Auth wrappers** - Create properly typed React.FC components for TanStack Router
 
 #### Authentication Flow
-1. **App startup** - AuthContext checks localStorage for existing token
-2. **Route access** - HOCs check authentication status
-3. **Automatic redirects** - To login if not authenticated, to home if already authenticated
-4. **Loading states** - While checking authentication
-5. **Clean components** - No auth logic in page components
+1. **App startup** - AuthContext checks localStorage for existing token and calls `/auth/me` to verify
+2. **Token validation** - If token exists, `/auth/me` endpoint validates it with the server
+3. **Matrix authentication** - Matrix auth data is stored and retrieved alongside user authentication
+4. **Invalid token handling** - If token is invalid, localStorage is cleared and user is logged out
+5. **Route access** - HOCs check authentication status
+6. **Automatic redirects** - To login if not authenticated, to home if already authenticated
+7. **Loading states** - While checking authentication
+8. **Clean components** - No auth logic in page components
 
 ### Updated File Structure
 ```
 src/
 ├── components/
-│   └── guards/
-│       ├── with-auth.tsx     # HOC for protected routes
-│       ├── with-guest.tsx    # HOC for guest-only routes
-│       └── auth-wrappers.tsx # Type-safe router components
+│   ├── guards/
+│   │   ├── with-auth.tsx     # HOC for protected routes
+│   │   ├── with-guest.tsx    # HOC for guest-only routes
+│   │   └── auth-wrappers.tsx # Type-safe router components
+│   └── chat/                 # Chat interface components
+│       ├── chat-interface.tsx
+│       ├── chat-sidebar.tsx
+│       ├── chat-input.tsx
+│       ├── message-bubble.tsx
+│       ├── files-tab.tsx
+│       ├── media-tab.tsx
+│       └── new-chat-modal.tsx
 ├── contexts/
-│   └── auth-context.tsx      # Global authentication state
+│   ├── auth-context.tsx      # Global authentication state
+│   └── matrix-context.tsx    # Matrix client state management
 ├── services/
 │   ├── api.ts                # Base API service
-│   └── auth.ts               # Auth service with TanStack Query
+│   ├── auth.ts               # Auth service with TanStack Query
+│   └── matrix.ts             # Matrix client service
 ├── types/
 │   └── auth.ts               # Auth-related type definitions
 ├── pages/
 │   ├── auth/
 │   │   ├── login.tsx         # Login page
 │   │   └── register.tsx      # Register page
-│   └── home-page.tsx         # Clean home page (no auth logic)
+│   └── home-page.tsx         # Matrix-powered chat interface
 └── lib/
     └── router.tsx            # Routes with protection applied
 ```
@@ -456,4 +505,148 @@ const someRoute = createRoute({
 - **TanStack Router** for navigation and route protection
 - **Context API** for global auth state
 - **TypeScript** for type safety throughout
-- **Route guards** for scalable protection 
+- **Route guards** for scalable protection
+
+## Matrix/Dendrite Integration
+
+### Overview
+Complete Matrix client integration with Dendrite server for real-time messaging, room management, and live chat functionality.
+
+### Matrix Service (`src/services/matrix.ts`)
+- **Matrix client initialization** with authentication data
+- **Real-time message handling** with event listeners
+- **Room management** (join, create, list rooms)
+- **Message sending** with reply support
+- **Type-safe interfaces** for Matrix messages and rooms
+- **Automatic reconnection** and error handling
+- **Rate limiting protection** with request throttling and queuing
+- **Message deletion handling** with proper redaction support
+- **Typing indicators** with debouncing and throttling
+- **Unread count management** with real-time updates
+- **Read receipts** for marking rooms as read
+
+### Matrix Context (`src/contexts/matrix-context.tsx`)
+- **Global Matrix state management** with React Context
+- **Real-time message updates** with automatic UI synchronization
+- **Room selection** and management
+- **Connection status** monitoring
+- **Message sending** with reply support
+- **Automatic initialization** when Matrix auth is available
+- **Typing indicator management** with real-time updates
+- **Unread count tracking** with automatic updates
+- **Read receipt handling** for marking rooms as read
+
+### Key Features Implemented
+
+#### Real-time Messaging
+- **Live message synchronization** from Matrix server
+- **Automatic UI updates** when new messages arrive
+- **Message sending** with proper error handling
+- **Reply functionality** with Matrix event relations
+- **Message history** loading from Matrix timeline
+- **Message editing** with Matrix protocol compliance
+- **Message deletion** with redaction support
+- **Empty message filtering** to prevent spam from deleted messages
+
+#### Room Management
+- **Room listing** from Matrix server
+- **Room joining** functionality
+- **Room creation** with public/private options
+- **Room metadata** (name, avatar, member count)
+- **Unread message counts** from Matrix notifications
+- **Automatic room invitation acceptance**
+- **Direct message creation** with user search
+
+#### Connection Management
+- **Automatic connection** when Matrix auth is available
+- **Connection status** monitoring and display
+- **Reconnection logic** for network issues
+- **Clean disconnection** on logout
+- **Loading states** during connection
+- **Rate limiting protection** with automatic retry
+- **Network error handling** with graceful degradation
+
+#### UI Integration
+- **Seamless chat interface** with Matrix data
+- **Real-time message bubbles** with proper formatting
+- **Online indicator** when Matrix is connected
+- **Loading states** during Matrix operations
+- **Error handling** with user feedback
+- **New chat button** in sidebar for starting conversations
+- **User search modal** with Matrix user directory integration
+- **Direct message creation** with automatic room creation
+- **Typing indicators** with real-time updates
+- **Unread count badges** with automatic updates
+- **Read receipt handling** for proper message status
+
+### Matrix Data Flow
+1. **Authentication** - Matrix auth data from server login
+2. **Client initialization** - Matrix client connects to Dendrite
+3. **Room loading** - Fetch and display user's rooms
+4. **Message synchronization** - Real-time message updates
+5. **UI updates** - Automatic chat interface updates
+6. **Message sending** - Send messages through Matrix client
+7. **Typing indicators** - Real-time typing status updates
+8. **Unread counts** - Automatic badge updates
+9. **Read receipts** - Mark rooms as read when selected
+
+### Matrix Event Handling
+- **Timeline events** - New messages in rooms
+- **Membership events** - Room join/leave notifications
+- **Message events** - Text message handling
+- **Reply events** - Message reply relationships
+- **Avatar events** - User avatar updates
+- **Typing events** - Real-time typing indicators
+- **Redaction events** - Message deletion handling
+- **Edit events** - Message editing with Matrix protocol
+
+### Error Handling
+- **Connection failures** - Automatic retry logic
+- **Authentication errors** - Clear error messages
+- **Message send failures** - User notification
+- **Network issues** - Graceful degradation
+- **Invalid data** - Safe fallbacks
+- **Rate limiting** - Automatic retry with backoff
+- **Empty messages** - Filtering of deleted message spam
+
+### Performance Optimizations
+- **Efficient message rendering** with React keys
+- **Minimal re-renders** with proper state management
+- **Memory management** with cleanup on unmount
+- **Network optimization** with connection pooling
+- **UI responsiveness** with async operations
+- **Request throttling** to prevent rate limiting
+- **Debounced typing** to reduce API calls
+- **Message filtering** to prevent empty message spam
+
+### Recent Updates (2024-12-19)
+- **Real-time messaging** - Messages now appear instantly across all connected clients
+- **Typing indicators** - Real-time typing status with proper debouncing and throttling
+- **Unread count updates** - Automatic badge updates when new messages arrive
+- **Read receipts** - Rooms are marked as read when selected
+- **Message deletion handling** - Proper filtering of deleted messages to prevent empty content spam
+- **Rate limiting protection** - Request queuing and throttling to prevent Matrix server overload
+- **Network error handling** - Graceful handling of connection issues and automatic retry
+- **Enhanced logging** - Detailed console logs for debugging message flow and sync status
+- **Connection status monitoring** - Real-time connection health checks and status display
+
+### Latest Progress (2024-12-19 Evening)
+- **Real-time messaging working** - Messages are being sent and received in real-time across different accounts
+- **Typing indicators implemented** - Added proper typing event listeners and handling with debouncing
+- **Unread count updates** - Added real-time unread count tracking and updates
+- **Read receipts** - Implemented marking rooms as read when selected
+- **Empty message filtering** - Fixed issue where deleted messages were showing as empty content
+- **Enhanced error handling** - Better handling of redacted messages and network issues
+- **Rate limiting protection** - Request queuing and throttling to prevent Matrix server overload
+- **Connection monitoring** - Real-time connection status and health checks
+
+### Testing Status
+- ✅ **Message sending** - Messages are sent successfully and appear in real-time
+- ✅ **Message receiving** - Messages from other users appear instantly
+- ✅ **Room management** - Rooms are loaded and managed properly
+- ✅ **Connection handling** - Matrix client connects and stays connected
+- 🔄 **Typing indicators** - Implementation complete, testing in progress
+- 🔄 **Unread counts** - Implementation complete, testing in progress
+- ✅ **Message editing** - Edit functionality works with Matrix protocol
+- ✅ **Message deletion** - Deletion works with proper redaction
+- ✅ **Empty message filtering** - Deleted messages are properly filtered out 

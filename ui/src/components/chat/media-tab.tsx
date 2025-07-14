@@ -50,7 +50,7 @@ const getMediaTypeColor = (type: MediaItem['type']) => {
 export const MediaTab: React.FC<MediaTabProps> = ({ media }) => {
     const handleDownload = (mediaItem: MediaItem) => {
         // In a real app, this would trigger the actual download
-        console.log('Downloading media:', mediaItem.name)
+
 
         // Create a temporary link to trigger download
         const link = document.createElement('a')
@@ -63,13 +63,13 @@ export const MediaTab: React.FC<MediaTabProps> = ({ media }) => {
 
     const handlePreview = (mediaItem: MediaItem) => {
         // In a real app, this would open a preview modal
-        console.log('Previewing media:', mediaItem.name)
+
         window.open(mediaItem.url, '_blank')
     }
 
     const handlePlay = (mediaItem: MediaItem) => {
         // In a real app, this would play the media
-        console.log('Playing media:', mediaItem.name)
+
         const audio = new Audio(mediaItem.url)
         audio.play()
     }

@@ -1,10 +1,12 @@
 import React from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Reply, MoreHorizontal, Smile } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MessageOptionsMenu } from './message-options-menu'
 
 interface MessageBubbleProps {
     message: {
@@ -29,6 +31,8 @@ interface MessageBubbleProps {
                 name: string
             }
         }
+        isEdited?: boolean
+        isDeleted?: boolean
     }
     onReply: (messageId: string) => void
     onEdit: (messageId: string) => void
@@ -49,7 +53,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     onReplyClick,
     isHighlighted = false,
 }) => {
-    const [showOptions, setShowOptions] = React.useState(false)
     const [showReactions, setShowReactions] = React.useState(false)
 
     return (
@@ -82,9 +85,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         <ContextMenuTrigger>
                             <div className={cn(
                                 "relative rounded-lg px-3 py-2 text-sm transition-all duration-300",
-                                message.isOwn
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted",
+                                message.isDeleted
+                                    ? "bg-gray-100 text-gray-500 border border-gray-200"
+                                    : message.isOwn
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-muted",
                                 isHighlighted && "ring-2 ring-blue-500 ring-offset-2"
                             )}>
                                 {/* Reply preview */}
@@ -107,97 +112,115 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                     </div>
                                 )}
 
-                                <p className="whitespace-pre-wrap">{message.content}</p>
+                                <p className="whitespace-pre-wrap">
+                                    {message.isDeleted ? '[Message deleted]' : message.content}
+                                </p>
 
                                 {/* Message options - show on hover */}
-                                <div className={cn(
-                                    "absolute top-1/2 -translate-y-1/2 opacity-0 transition-opacity",
-                                    message.isOwn ? "-left-12" : "-right-12",
-                                    "group-hover:opacity-100 z-10 bg-background rounded-md shadow-md border p-1"
-                                )}>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 text-foreground hover:bg-muted"
-                                            onClick={() => onReply(message.id)}
-                                        >
-                                            <Reply className="h-3 w-3" />
-                                        </Button>
+                                {!message.isDeleted && (
+                                    <div className={cn(
+                                        "absolute top-1/2 -translate-y-1/2 opacity-0 transition-opacity",
+                                        message.isOwn ? "-left-12" : "-right-12",
+                                        "group-hover:opacity-100 z-10 bg-background rounded-md shadow-md border p-1"
+                                    )}>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 text-foreground hover:bg-muted"
+                                                onClick={() => onReply(message.id)}
+                                            >
+                                                <Reply className="h-3 w-3" />
+                                            </Button>
 
-                                        <Popover open={showReactions} onOpenChange={setShowReactions}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0 text-foreground hover:bg-muted"
-                                                >
-                                                    <Smile className="h-3 w-3" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-2" align="center">
-                                                <div className="flex gap-1">
-                                                    {EMOJI_REACTIONS.map((emoji) => (
-                                                        <Button
-                                                            key={emoji}
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 w-8 p-0 text-lg"
-                                                            onClick={() => {
-                                                                onReact(message.id, emoji)
-                                                                setShowReactions(false)
-                                                            }}
-                                                        >
-                                                            {emoji}
-                                                        </Button>
-                                                    ))}
-                                                </div>
-                                            </PopoverContent>
-                                        </Popover>
+                                            <Popover open={showReactions} onOpenChange={setShowReactions}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0 text-foreground hover:bg-muted"
+                                                    >
+                                                        <Smile className="h-3 w-3" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-2" align="center">
+                                                    <div className="flex gap-1">
+                                                        {EMOJI_REACTIONS.map((emoji) => (
+                                                            <Button
+                                                                key={emoji}
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-8 w-8 p-0 text-lg"
+                                                                onClick={() => {
+                                                                    onReact(message.id, emoji)
+                                                                    setShowReactions(false)
+                                                                }}
+                                                            >
+                                                                {emoji}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </PopoverContent>
+                                            </Popover>
 
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 text-foreground hover:bg-muted"
-                                            onClick={() => setShowOptions(!showOptions)}
-                                        >
-                                            <MoreHorizontal className="h-3 w-3" />
-                                        </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0 text-foreground hover:bg-muted"
+                                                    >
+                                                        <MoreHorizontal className="h-3 w-3" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <MessageOptionsMenu
+                                                        messageId={message.id}
+                                                        isOwn={message.isOwn}
+                                                        onReply={onReply}
+                                                        onEdit={onEdit}
+                                                        onDelete={onDelete}
+                                                        variant="dropdown"
+                                                    />
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </ContextMenuTrigger>
 
                         <ContextMenuContent>
-                            <ContextMenuItem onClick={() => onReply(message.id)}>
-                                Reply
-                            </ContextMenuItem>
-                            {message.isOwn && (
-                                <>
-                                    <ContextMenuItem onClick={() => onEdit(message.id)}>
-                                        Edit
-                                    </ContextMenuItem>
-                                    <ContextMenuItem
-                                        onClick={() => onDelete(message.id)}
-                                        className="text-destructive"
-                                    >
-                                        Delete
-                                    </ContextMenuItem>
-                                </>
+                            {!message.isDeleted && (
+                                <MessageOptionsMenu
+                                    messageId={message.id}
+                                    isOwn={message.isOwn}
+                                    onReply={onReply}
+                                    onEdit={onEdit}
+                                    onDelete={onDelete}
+                                    variant="context"
+                                />
                             )}
                         </ContextMenuContent>
                     </ContextMenu>
 
-                    {/* Timestamp */}
-                    <span className={cn(
-                        "text-xs text-muted-foreground mt-1",
-                        message.isOwn ? "text-right" : "text-left"
+                    {/* Timestamp and edited indicator */}
+                    <div className={cn(
+                        "flex items-center gap-1 mt-1",
+                        message.isOwn ? "justify-end" : "justify-start"
                     )}>
-                        {message.timestamp}
-                    </span>
+                        <span className="text-xs text-muted-foreground">
+                            {message.timestamp}
+                        </span>
+                        {message.isEdited && (
+                            <span className="text-xs text-muted-foreground italic">
+                                (edited)
+                            </span>
+                        )}
+                    </div>
 
                     {/* Reactions */}
-                    {message.reactions?.length > 0 && (
+                    {message.reactions && message.reactions.length > 0 && (
                         <div className={cn(
                             "flex flex-wrap gap-1 mt-2",
                             message.isOwn ? "justify-end" : "justify-start"

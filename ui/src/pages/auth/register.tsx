@@ -22,7 +22,7 @@ export const RegisterPage: React.FC = () => {
             { name, email, password, role },
             {
                 onSuccess: (data) => {
-                    login(data.token, data.user);
+                    login(data.token, data.user, data.matrix);
                     navigate({ to: '/' });
                 },
             }

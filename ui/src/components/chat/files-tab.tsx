@@ -65,7 +65,7 @@ const getFileTypeColor = (type: FileItem['type']) => {
 export const FilesTab: React.FC<FilesTabProps> = ({ files }) => {
     const handleDownload = (file: FileItem) => {
         // In a real app, this would trigger the actual download
-        console.log('Downloading file:', file.name)
+
 
         // Create a temporary link to trigger download
         const link = document.createElement('a')
@@ -78,7 +78,7 @@ export const FilesTab: React.FC<FilesTabProps> = ({ files }) => {
 
     const handlePreview = (file: FileItem) => {
         // In a real app, this would open a preview modal
-        console.log('Previewing file:', file.name)
+
         window.open(file.url, '_blank')
     }
 

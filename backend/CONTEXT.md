@@ -20,6 +20,13 @@ backend/
 │   ├── core/                   # Core utilities
 │   │   ├── transformers/       # Base transformer system
 │   │   └── core.module.ts      # Core module
+│   ├── matrix/                 # Matrix authentication module
+│   │   ├── matrix.service.ts   # Matrix client and auth logic
+│   │   └── matrix.module.ts    # Matrix module
+│   ├── users/                  # User management module
+│   │   ├── users.controller.ts # User endpoints
+│   │   ├── users.service.ts    # User business logic
+│   │   └── users.module.ts     # Users module
 │   ├── prisma/                 # Database layer
 │   │   ├── extensions/         # Prisma extensions
 │   │   ├── prisma.service.ts   # Prisma client service
@@ -78,6 +85,8 @@ Create a `.env` file in the root directory:
 DATABASE_URL="postgresql://username:password@localhost:5432/database_name"
 JWT_SECRET="your-super-secret-jwt-key"
 HTTP_PORT=3000
+MATRIX_SERVER_URL="http://dendrite:8008"
+MATRIX_SHARED_SECRET="dendrite-secret-key-2025"
 ```
 
 ### Environment Validation
@@ -90,11 +99,14 @@ HTTP_PORT=3000
 ### Models
 ```prisma
 model User {
-  id        String   @id @default(cuid())
+  id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
   name      String?
   role      Role     @default(USER)
+  matrixUserId    String?
+  matrixAccessToken String?
+  matrixDeviceId   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   deletedAt DateTime?
@@ -104,11 +116,11 @@ model User {
 }
 
 model Post {
-  id        String   @id @default(cuid())
+  id        Int      @id @default(autoincrement())
   title     String
   content   String?
   published Boolean  @default(false)
-  authorId  String
+  authorId  Int
   author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -181,9 +193,40 @@ npx prisma migrate reset --force
 - **@CurrentUser()**: Extracts user from request
 
 ### Auth Endpoints
-- `POST /api/v1/auth/register` - Register new user
-- `POST /api/v1/auth/login` - Login user
+- `POST /api/v1/auth/register` - Register new user (includes Matrix auth)
+- `POST /api/v1/auth/login` - Login user (includes Matrix auth)
 - `GET /api/v1/auth/me` - Get current user profile
+
+### User Management Endpoints
+- `GET /api/v1/users/search` - Search users with Matrix IDs (ADMIN only)
+- `GET /api/v1/users/:id` - Get specific user by ID (ADMIN only)
+
+### Matrix Authentication
+- **Unified Authentication**: Single login provides both JWT and Matrix credentials
+- **Automatic Matrix User Creation**: Matrix users are created automatically during registration
+- **Credential Storage**: Matrix credentials are stored securely in the database
+- **Fallback Handling**: Application continues to work even if Matrix server is unavailable
+- **Matrix SDK Integration**: Uses `matrix-js-sdk` for server-side Matrix operations
+
+### Matrix Response Format
+```typescript
+{
+  message: string,
+  user: {
+    id: number,
+    email: string,
+    name: string,
+    role: string,
+  },
+  token: string, // JWT token
+  matrix: {
+    userId: string,      // @user:matrix.pension.test
+    accessToken: string, // Matrix access token
+    deviceId: string,    // Matrix device ID
+    serverUrl: string,   // Matrix server URL
+  } | null
+}
+```
 
 ## ✅ Validation System
 
@@ -364,6 +407,12 @@ export class CoreModule {}
 6. Add module to app.module.ts
 7. Update this CONTEXT.md file
 
+### Matrix Integration
+- Matrix authentication is automatically handled during user registration and login
+- Matrix credentials are stored in the User model
+- The MatrixService handles all Matrix server communication
+- Failed Matrix operations don't prevent application authentication
+
 ### Adding New Endpoints
 1. Create/update Zod DTOs
 2. Add service method
@@ -442,6 +491,14 @@ export class CoreModule {}
 - `src/auth/auth.controller.ts` - Auth endpoints
 - `src/auth/guards/` - Authentication guards
 - `src/auth/strategies/jwt.strategy.ts` - JWT validation
+- `src/matrix/matrix.service.ts` - Matrix authentication service
+- `src/matrix/matrix.module.ts` - Matrix module configuration
+
+### User Management
+- `src/users/users.controller.ts` - User search and detail endpoints
+- `src/users/users.service.ts` - User search business logic
+- `src/users/users.module.ts` - Users module configuration
+- `src/users/transformers/user.transformer.ts` - User data transformation
 
 ### Database
 - `src/prisma/prisma.service.ts` - Database client

@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService } from './api';
-import type { User, LoginCredentials, RegisterCredentials, AuthResponse } from '@/types/auth';
+import type { User, LoginCredentials, RegisterCredentials, AuthResponse, MatrixAuth } from '@/types/auth';
 
 // Auth service functions
 export const authService = {
@@ -12,9 +12,14 @@ export const authService = {
     return apiService.post<AuthResponse>('/auth/register', credentials);
   },
 
+  async me(): Promise<AuthResponse> {
+    return apiService.get<AuthResponse>('/auth/me');
+  },
+
   async logout(): Promise<void> {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('matrix');
   },
 
   getCurrentUser(): User | null {
@@ -26,8 +31,26 @@ export const authService = {
     return localStorage.getItem('token');
   },
 
+  getMatrixAuth(): MatrixAuth | null {
+    const matrixStr = localStorage.getItem('matrix');
+    return matrixStr ? JSON.parse(matrixStr) : null;
+  },
+
   isAuthenticated(): boolean {
     return !!this.getToken();
+  },
+
+  // Utility function to get Matrix auth data
+  getMatrixAuthData(): { userId: string; accessToken: string; deviceId: string; serverUrl: string } | null {
+    const matrixAuth = this.getMatrixAuth();
+    if (!matrixAuth) return null;
+    
+    return {
+      userId: matrixAuth.userId,
+      accessToken: matrixAuth.accessToken,
+      deviceId: matrixAuth.deviceId,
+      serverUrl: matrixAuth.serverUrl,
+    };
   },
 };
 
@@ -47,5 +70,15 @@ export const useRegister = () => {
 export const useLogout = () => {
   return useMutation({
     mutationFn: authService.logout,
+  });
+};
+
+export const useMe = () => {
+  return useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: authService.me,
+    retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!authService.getToken(), // Only run if token exists
   });
 }; 

@@ -2,7 +2,6 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 interface ReplyTo {
     id: string
@@ -21,6 +20,7 @@ interface ChatInputProps {
     value: string
     onChange: (value: string) => void
     onSend: () => void
+    onTyping?: (isTyping: boolean) => void
     replyTo?: ReplyTo
     editMessage?: EditMessage
     onCancelReply?: () => void
@@ -33,6 +33,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     value,
     onChange,
     onSend,
+    onTyping,
     replyTo,
     editMessage,
     onCancelReply,
@@ -44,6 +45,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             onSend()
+        }
+    }
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value
+        onChange(newValue)
+
+        // Send typing indicator only if we have content and it's not just whitespace
+        if (onTyping) {
+            onTyping(newValue.trim().length > 0)
         }
     }
 
@@ -94,7 +105,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 <div className="flex-1">
                     <Input
                         value={value}
-                        onChange={(e) => onChange(e.target.value)}
+                        onChange={handleChange}
                         onKeyPress={handleKeyPress}
                         placeholder={placeholder}
                         disabled={disabled}

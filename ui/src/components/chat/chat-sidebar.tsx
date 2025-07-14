@@ -1,6 +1,10 @@
 import React from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Plus, MoreVertical, RefreshCw, Wifi, WifiOff, AlertCircle, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ConnectionStatusEmbedded } from '@/components/ui/connection-status'
 
 interface Chat {
     id: string
@@ -10,23 +14,81 @@ interface Chat {
     lastMessageTime: string
     unreadCount?: number
     isGroup: boolean
+    typingUsers?: string[]
 }
 
 interface ChatSidebarProps {
     chats: Chat[]
     selectedChatId?: string
     onChatSelect: (chatId: string) => void
+    onNewChat?: () => void
+    onRefresh?: () => void
+    showConnectionStatus?: boolean
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     chats,
     selectedChatId,
     onChatSelect,
+    onNewChat,
+    onRefresh,
+    showConnectionStatus = false,
 }) => {
     return (
         <div className="w-80 border-r bg-background">
             <div className="p-4 border-b">
-                <h2 className="text-lg font-semibold">Chats</h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">Chats</h2>
+                    <div className="flex items-center gap-2">
+                        {onNewChat && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onNewChat}
+                                className="h-8 w-8 p-0"
+                            >
+                                <Plus className="h-4 w-4" />
+                            </Button>
+                        )}
+
+                        {(onRefresh || showConnectionStatus) && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                    >
+                                        <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64" align="end">
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-sm">Chat Options</h4>
+
+                                        {onRefresh && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={onRefresh}
+                                                className="w-full justify-start gap-2"
+                                            >
+                                                <RefreshCw className="h-4 w-4" />
+                                                Refresh Chats
+                                            </Button>
+                                        )}
+
+                                        {showConnectionStatus && (
+                                            <div className="pt-2 border-t">
+                                                <ConnectionStatusEmbedded />
+                                            </div>
+                                        )}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="overflow-y-auto h-[calc(100vh-80px)]">
@@ -57,7 +119,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
                                 <div className="flex items-center justify-between mt-1">
                                     <p className="text-sm text-muted-foreground truncate">
-                                        {chat.lastMessage}
+                                        {chat.typingUsers && chat.typingUsers.length > 0
+                                            ? `${chat.typingUsers.length === 1 ? chat.typingUsers[0] : chat.typingUsers.join(', ')} is typing...`
+                                            : chat.lastMessage
+                                        }
                                     </p>
                                     {chat.unreadCount && chat.unreadCount > 0 && (
                                         <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">

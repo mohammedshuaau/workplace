@@ -3,6 +3,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { MatrixService } from '../matrix/matrix.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import * as bcrypt from 'bcryptjs';
 
@@ -11,8 +12,15 @@ export class AuthController {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private matrixService: MatrixService,
   ) {}
 
+  /**
+   * Registers a new user with both application and Matrix authentication
+   * @param dto - The user registration data
+   * @returns Promise containing user data and authentication tokens
+   * @throws HttpException if user already exists or Matrix creation fails
+   */
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     const { email, password, name, role } = dto;
@@ -39,6 +47,33 @@ export class AuthController {
       },
     });
 
+    // Create Matrix user
+    let matrixCredentials;
+    try {
+      matrixCredentials = await this.matrixService.createMatrixUser(
+        user.id,
+        user.email,
+        password,
+        user.name || undefined // Pass the user's name as display name, or undefined if null
+      );
+      // Save Matrix credentials to database
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          matrixUserId: matrixCredentials.matrixUserId,
+          matrixAccessToken: matrixCredentials.accessToken,
+          matrixDeviceId: matrixCredentials.deviceId,
+        },
+      });
+    } catch (error) {
+      // Rollback user creation if Matrix fails
+      await this.prisma.user.delete({ where: { id: user.id } });
+      throw new HttpException(
+        `Matrix registration failed: ${error.message || error}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
     // Generate JWT token
     const payload = {
       sub: user.id,
@@ -57,9 +92,21 @@ export class AuthController {
         role: user.role,
       },
       token,
+      matrix: {
+        userId: matrixCredentials.matrixUserId,
+        accessToken: matrixCredentials.accessToken,
+        deviceId: matrixCredentials.deviceId,
+        serverUrl: process.env.MATRIX_SERVER_URL || 'http://dendrite:8008',
+      },
     };
   }
 
+  /**
+   * Logs in a user with both application and Matrix authentication
+   * @param dto - The user login data
+   * @returns Promise containing user data and authentication tokens
+   * @throws HttpException if credentials are invalid
+   */
   @Post('login')
   async login(@Body() dto: LoginDto) {
     const { email, password } = dto;
@@ -80,6 +127,37 @@ export class AuthController {
       throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
     }
 
+    // Get or create Matrix credentials
+    let matrixCredentials;
+    try {
+      if (user.matrixUserId && user.matrixAccessToken) {
+        // Try to get existing Matrix credentials
+        matrixCredentials = await this.matrixService.getMatrixCredentials(user.id);
+      } else {
+        // Create new Matrix user if doesn't exist
+        matrixCredentials = await this.matrixService.createMatrixUser(
+          user.id,
+          user.email,
+          password,
+          user.name || undefined // Pass the user's name as display name, or undefined if null
+        );
+        // Save Matrix credentials to database
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            matrixUserId: matrixCredentials.matrixUserId,
+            matrixAccessToken: matrixCredentials.accessToken,
+            matrixDeviceId: matrixCredentials.deviceId,
+          },
+        });
+      }
+    } catch (error) {
+      throw new HttpException(
+        `Matrix authentication failed: ${error.message || error}`,
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
     // Generate JWT token
     const payload = {
       sub: user.id,
@@ -98,6 +176,12 @@ export class AuthController {
         role: user.role,
       },
       token,
+      matrix: {
+        userId: matrixCredentials.matrixUserId,
+        accessToken: matrixCredentials.accessToken,
+        deviceId: matrixCredentials.deviceId,
+        serverUrl: process.env.MATRIX_SERVER_URL || 'http://dendrite:8008',
+      },
     };
   }
 
