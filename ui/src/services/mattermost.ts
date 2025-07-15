@@ -161,10 +161,14 @@ export class MattermostService {
   }
 
   /**
-   * Send a message to a channel (DM)
+   * Send a message to a channel (DM or reply)
    */
-  async sendMessage(channelId: string, message: string): Promise<Post> {
-    return this.client.createPost({ channel_id: channelId, message });
+  async sendMessage(channelId: string, message: string, rootId?: string): Promise<Post> {
+    return this.client.createPost({
+      channel_id: channelId,
+      message,
+      ...(rootId ? { root_id: rootId } : {}),
+    });
   }
 
   /**

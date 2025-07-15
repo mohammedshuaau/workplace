@@ -93,46 +93,90 @@ export const ChatPage: React.FC = () => {
         });
     }, []);
 
+    // Get current user's Mattermost ID
+    const getCurrentMattermostUserId = () => {
+        try {
+            const mm = localStorage.getItem('mattermost');
+            if (mm) {
+                const mmObj = JSON.parse(mm);
+                return mmObj.user?.id || mmObj.id || null;
+            }
+        } catch { }
+        return null;
+    };
+    const currentUserId = getCurrentMattermostUserId();
+
     // Listen to messages for selected chat
     React.useEffect(() => {
         if (!selectedChatId) return;
         let cancel: (() => void) | undefined;
         pouchdbReady.then(() => {
             getMessages(selectedChatId).then((msgs) => {
+                // Build a map for quick lookup
+                const messageMap = new Map(msgs.map(m => [m._id, m]));
                 setMessages(
-                    msgs.map((m) => ({
-                        id: m._id,
-                        content: m.content,
-                        timestamp: m.timestamp,
-                        sender: { id: m.senderId, name: m.senderName },
-                        isOwn: false, // TODO: set based on current user
-                        seenBy: mapSeenBy(m.seenBy),
-                        reactions: mapReactions(m.reactions),
-                        isEdited: m.isEdited,
-                        status: m.status,
-                    }))
+                    msgs.map((m) => {
+                        let replyToObj;
+                        if (m.replyTo) {
+                            const repliedMsg = messageMap.get(m.replyTo);
+                            if (repliedMsg) {
+                                replyToObj = {
+                                    id: repliedMsg._id,
+                                    content: repliedMsg.content,
+                                    sender: { name: repliedMsg.senderName }
+                                };
+                            }
+                        }
+                        return {
+                            id: m._id,
+                            content: m.content,
+                            timestamp: m.timestamp,
+                            sender: { id: m.senderId, name: m.senderName },
+                            isOwn: m.senderId === currentUserId,
+                            seenBy: mapSeenBy(m.seenBy),
+                            reactions: mapReactions(m.reactions),
+                            isEdited: m.isEdited,
+                            status: m.status,
+                            ...(replyToObj ? { replyTo: replyToObj } : {}),
+                        };
+                    })
                 );
             });
             cancel = listenToMessages(selectedChatId, (msgs) => {
+                const messageMap = new Map(msgs.map(m => [m._id, m]));
                 setMessages(
-                    msgs.map((m) => ({
-                        id: m._id,
-                        content: m.content,
-                        timestamp: m.timestamp,
-                        sender: { id: m.senderId, name: m.senderName },
-                        isOwn: false, // TODO: set based on current user
-                        seenBy: mapSeenBy(m.seenBy),
-                        reactions: mapReactions(m.reactions),
-                        isEdited: m.isEdited,
-                        status: m.status,
-                    }))
+                    msgs.map((m) => {
+                        let replyToObj;
+                        if (m.replyTo) {
+                            const repliedMsg = messageMap.get(m.replyTo);
+                            if (repliedMsg) {
+                                replyToObj = {
+                                    id: repliedMsg._id,
+                                    content: repliedMsg.content,
+                                    sender: { name: repliedMsg.senderName }
+                                };
+                            }
+                        }
+                        return {
+                            id: m._id,
+                            content: m.content,
+                            timestamp: m.timestamp,
+                            sender: { id: m.senderId, name: m.senderName },
+                            isOwn: m.senderId === currentUserId,
+                            seenBy: mapSeenBy(m.seenBy),
+                            reactions: mapReactions(m.reactions),
+                            isEdited: m.isEdited,
+                            status: m.status,
+                            ...(replyToObj ? { replyTo: replyToObj } : {}),
+                        };
+                    })
                 );
             });
         });
         return () => {
             if (cancel) cancel();
         };
-    }, [selectedChatId]);
+    }, [selectedChatId, currentUserId]);
 
     // Subscribe to real-time updates for selected chat
     React.useEffect(() => {

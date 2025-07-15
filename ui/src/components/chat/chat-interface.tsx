@@ -172,6 +172,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             isOwn: true,
             seenBy: [],
             status: 'sending',
+            ...(replyTo ? {
+                replyTo: {
+                    id: replyTo.id,
+                    content: replyTo.content,
+                    sender: { name: replyTo.sender.name }
+                }
+            } : {}),
         };
         // setChats(prevChats => prevChats.map(chat =>
         //     chat.id === selectedChat.id
@@ -181,7 +188,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setMessageInput('');
         setReplyTo(null);
         try {
-            const sent = await mattermostService.sendMessage(selectedChat.id, messageInput);
+            await mattermostService.sendMessage(
+                selectedChat.id,
+                messageInput,
+                replyTo ? replyTo.id : undefined
+            );
             // On success, replace optimistic message with real one
             // setChats(prevChats => prevChats.map(chat =>
             //     chat.id === selectedChat.id
