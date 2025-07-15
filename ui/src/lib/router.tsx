@@ -1,5 +1,6 @@
 import { createRouter, createRoute, createRootRoute, Outlet } from '@tanstack/react-router'
 import { ProtectedHome, GuestLogin, GuestRegister } from '../components/guards/auth-wrappers'
+import { ChatPage } from '../pages/chat-page'
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -15,6 +16,12 @@ const indexRoute = createRoute({
   component: ProtectedHome,
 })
 
+const chatRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chat',
+  component: ChatPage,
+})
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/auth/login',
@@ -27,7 +34,12 @@ const registerRoute = createRoute({
   component: GuestRegister,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute])
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  chatRoute,
+  loginRoute,
+  registerRoute,
+])
 
 export const router = createRouter({ routeTree })
 

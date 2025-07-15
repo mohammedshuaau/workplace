@@ -8,12 +8,10 @@ CREATE TABLE "users" (
     "password" TEXT NOT NULL,
     "name" TEXT,
     "role" "Role" NOT NULL DEFAULT 'USER',
-    "matrixUserId" TEXT,
-    "matrixAccessToken" TEXT,
-    "matrixDeviceId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
+    "mattermostToken" TEXT,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );

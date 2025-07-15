@@ -7,8 +7,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthController } from './auth.controller';
-import { MatrixModule } from '../matrix/matrix.module';
 import { JWT_SECRET } from '../../env';
+import { MattermostModule } from '../mattermost/mattermost.module';
 
 @Module({
   imports: [
@@ -17,7 +17,7 @@ import { JWT_SECRET } from '../../env';
       secret: JWT_SECRET as string,
       signOptions: { expiresIn: '1d' },
     }),
-    MatrixModule,
+    MattermostModule,
   ],
   controllers: [AuthController],
   providers: [

@@ -8,30 +8,31 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Phone, Video, ChevronDown, MessageSquare, File, Image } from 'lucide-react'
+import { mattermostService } from '@/services/mattermost';
 
-interface Message {
-    id: string
-    content: string
-    timestamp: string
+export interface Message {
+    id: string;
+    tempId?: string; // For optimistic messages
+    content: string;
+    timestamp: string;
     sender: {
-        id: string
-        name: string
-        avatar?: string
-    }
-    isOwn: boolean
-    seenBy: Array<{ id: string; name: string; avatar?: string }>
+        id: string;
+        name: string;
+        avatar?: string;
+    };
+    isOwn: boolean;
+    seenBy: Array<{ id: string; name: string; avatar?: string }>;
     reactions?: Array<{
-        emoji: string
-        users: Array<{ id: string; name: string; avatar?: string }>
-    }>
+        emoji: string;
+        users: Array<{ id: string; name: string; avatar?: string }>;
+    }>;
     replyTo?: {
-        id: string
-        content: string
-        sender: {
-            name: string
-        }
-    }
-    isEdited?: boolean
+        id: string;
+        content: string;
+        sender: { name: string };
+    };
+    isEdited?: boolean;
+    status?: 'sending' | 'delivered' | 'failed';
 }
 
 interface FileItem {
@@ -67,7 +68,7 @@ interface MediaItem {
     isOwn: boolean
 }
 
-interface Chat {
+export interface Chat {
     id: string
     name: string
     avatar?: string
@@ -80,6 +81,7 @@ interface Chat {
     files: FileItem[]
     media: MediaItem[]
     typingUsers?: string[]
+    typingUsersUpdatedAt?: number
 }
 
 interface ChatInterfaceProps {
@@ -93,6 +95,11 @@ interface ChatInterfaceProps {
     onNewChat?: () => void
     onRefresh?: () => void
     showConnectionStatus?: boolean
+    onRetry?: (chatId: string, tempId: string, content: string) => void;
+    onCancel?: (chatId: string, tempId: string) => void;
+    onLoadPrevious?: (chatId: string) => void;
+    messages?: Message[]; // Add messages prop
+    connectionStatus?: 'connecting' | 'online' | 'offline' | 'syncing';
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -106,6 +113,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onNewChat,
     onRefresh,
     showConnectionStatus = false,
+    onRetry,
+    onCancel,
+    onLoadPrevious,
+    messages, // Destructure messages prop
+    connectionStatus,
 }) => {
     const [messageInput, setMessageInput] = React.useState('')
     const [replyTo, setReplyTo] = React.useState<Message | null>(null)
@@ -117,34 +129,98 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const [activeTab, setActiveTab] = React.useState<'chat' | 'files' | 'media'>('chat')
     const messagesEndRef = React.useRef<HTMLDivElement>(null)
     const messagesContainerRef = React.useRef<HTMLDivElement>(null)
+    // Add state for showing members modal and storing members
+    const [showMembersModal, setShowMembersModal] = React.useState(false);
+    const [groupMembers, setGroupMembers] = React.useState<{ id: string, name: string, email: string }[]>([]);
+
+    // Function to fetch group members (stub, to be implemented)
+    async function fetchGroupMembers(channelId: string) {
+        const profiles = await mattermostService.getChannelMemberProfiles(channelId);
+        return profiles.map((profile: any) => ({
+            id: profile.id,
+            name: profile.nickname || (profile.first_name || profile.last_name ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : profile.username),
+            email: profile.email || '',
+        }));
+    }
+
+    // Handler to open members modal
+    const handleShowMembers = async () => {
+        if (selectedChat && selectedChat.isGroup) {
+            const members = await fetchGroupMembers(selectedChat.id);
+            setGroupMembers(members);
+            setShowMembersModal(true);
+        }
+    };
 
     const selectedChat = chats.find(chat => chat.id === selectedChatId)
 
+    // Use messages prop if provided, else fallback to selectedChat.messages
+    const messageList = messages ?? selectedChat?.messages ?? [];
+
+    // 2. Optimistic send message handler
     const handleSendMessage = async () => {
-        if (!messageInput.trim() || !selectedChat) return
-
-        if (editingMessage && onEditMessage) {
-            // Edit existing message
-            await onEditMessage(editingMessage.id, messageInput)
-            setEditingMessage(null)
-        } else if (onSendMessage) {
-            // Send new message
-            await onSendMessage(messageInput, replyTo?.id)
-        } else {
-            // Fallback to console log for demo
-
+        if (!messageInput.trim() || !selectedChat) return;
+        const tempId = `temp-${Date.now()}-${Math.random()}`;
+        const optimisticMessage: Message = {
+            id: tempId,
+            tempId,
+            content: messageInput,
+            timestamp: new Date().toISOString(),
+            sender: { id: 'me', name: 'You' }, // Optionally use real user ID
+            isOwn: true,
+            seenBy: [],
+            status: 'sending',
+        };
+        // setChats(prevChats => prevChats.map(chat =>
+        //     chat.id === selectedChat.id
+        //         ? { ...chat, messages: [...chat.messages, optimisticMessage] }
+        //         : chat
+        // ));
+        setMessageInput('');
+        setReplyTo(null);
+        try {
+            const sent = await mattermostService.sendMessage(selectedChat.id, messageInput);
+            // On success, replace optimistic message with real one
+            // setChats(prevChats => prevChats.map(chat =>
+            //     chat.id === selectedChat.id
+            //         ? {
+            //             ...chat,
+            //             messages: chat.messages.map(msg =>
+            //                 msg.tempId === tempId
+            //                     ? {
+            //                         ...msg,
+            //                         id: sent.id,
+            //                         tempId: undefined,
+            //                         status: 'delivered',
+            //                         timestamp: new Date(sent.create_at).toISOString(),
+            //                         sender: { id: sent.user_id, name: sent.user_id },
+            //                     }
+            //                     : msg
+            //             ),
+            //         }
+            //         : chat
+            // ));
+        } catch (err) {
+            // On failure, mark as failed
+            // setChats(prevChats => prevChats.map(chat =>
+            //     chat.id === selectedChat.id
+            //         ? {
+            //             ...chat,
+            //             messages: chat.messages.map(msg =>
+            //                 msg.tempId === tempId ? { ...msg, status: 'failed' } : msg
+            //             ),
+            //         }
+            //         : chat
+            // ));
         }
-
-        setMessageInput('')
-        setReplyTo(null)
-    }
+    };
 
     const handleReply = (messageId: string) => {
-        const message = selectedChat?.messages.find(m => m.id === messageId)
+        const message = messageList.find(m => m.id === messageId);
         if (message) {
-            setReplyTo(message)
+            setReplyTo(message);
         }
-    }
+    };
 
     const handleReplyClick = (messageId: string) => {
         setHighlightedMessageId(messageId)
@@ -172,10 +248,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
 
     const handleEdit = (messageId: string) => {
-        const message = selectedChat?.messages.find(m => m.id === messageId)
+        const message = messageList.find(m => m.id === messageId);
         if (message) {
-            setMessageInput(message.content)
-            setEditingMessage(message)
+            setMessageInput(message.content);
+            setEditingMessage(message);
         }
     }
 
@@ -191,7 +267,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 setShowDeleteDialog(false)
                 setMessageToDelete(null)
             } catch (error) {
-                console.error('Failed to delete message:', error)
                 // You could show a toast notification here
             }
         }
@@ -202,8 +277,123 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     }
 
+    // 3. WebSocket: Confirm delivery and add new messages
+    React.useEffect(() => {
+        const unsubscribe = mattermostService.subscribeToNewMessages((msg) => {
+            const post = JSON.parse(msg.data.post);
+            // setChats(prevChats => prevChats.map(chat => {
+            //     if (chat.id !== post.channel_id) return chat;
+            //     // If optimistic message exists, replace it
+            //     const optimisticIdx = chat.messages.findIndex(m => m.content === post.message && m.status === 'sending');
+            //     if (optimisticIdx !== -1) {
+            //         const newMessages = [...chat.messages];
+            //         newMessages[optimisticIdx] = {
+            //             ...newMessages[optimisticIdx],
+            //             id: post.id,
+            //             tempId: undefined,
+            //             status: 'delivered',
+            //             timestamp: new Date(post.create_at).toISOString(),
+            //             sender: { id: post.user_id, name: post.user_id },
+            //         };
+            //         return { ...chat, messages: newMessages };
+            //     }
+            //     // Otherwise, add as new message
+            //     return {
+            //         ...chat,
+            //         messages: [
+            //             ...chat.messages,
+            //             {
+            //                 id: post.id,
+            //                 content: post.message,
+            //                 timestamp: new Date(post.create_at).toISOString(),
+            //                 sender: { id: post.user_id, name: post.user_id },
+            //                 isOwn: post.user_id === 'me', // Optionally use real user ID
+            //                 seenBy: [],
+            //                 status: 'delivered',
+            //             },
+            //         ],
+            //     };
+            // }));
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // 4. Retry and cancel for failed messages
+    const handleRetry = (chatId: string, tempId: string, content: string) => {
+        // setChats(prevChats => prevChats.map(chat =>
+        //     chat.id === chatId
+        //         ? {
+        //             ...chat,
+        //             messages: chat.messages.map(msg =>
+        //                 msg.tempId === tempId ? { ...msg, status: 'sending' } : msg
+        //             ),
+        //         }
+        //         : chat
+        // ));
+        // Actually resend
+        mattermostService.sendMessage(chatId, content)
+            .then(sent => {
+                // setChats(prevChats => prevChats.map(chat =>
+                //     chat.id === chatId
+                //         ? {
+                //             ...chat,
+                //             messages: chat.messages.map(msg =>
+                //                 msg.tempId === tempId
+                //                     ? {
+                //                         ...msg,
+                //                         id: sent.id,
+                //                         tempId: undefined,
+                //                         status: 'delivered',
+                //                         timestamp: new Date(sent.create_at).toISOString(),
+                //                         sender: { id: sent.user_id, name: sent.user_id },
+                //                     }
+                //                     : msg
+                //             ),
+                //         }
+                //         : chat
+                // ));
+            })
+            .catch(() => {
+                // setChats(prevChats => prevChats.map(chat =>
+                //     chat.id === chatId
+                //         ? {
+                //             ...chat,
+                //             messages: chat.messages.map(msg =>
+                //                 msg.tempId === tempId ? { ...msg, status: 'failed' } : msg
+                //             ),
+                //         }
+                //         : chat
+                // ));
+            });
+    };
+    const handleCancel = (chatId: string, tempId: string) => {
+        // setChats(prevChats => prevChats.map(chat =>
+        //     chat.id === chatId
+        //         ? {
+        //             ...chat,
+        //             messages: chat.messages.filter(msg => msg.tempId !== tempId),
+        //         }
+        //         : chat
+        // ));
+    };
+
+    const handleEditMessage = async () => {
+        if (!editingMessage || !messageInput.trim()) return;
+        if (onEditMessage) {
+            await onEditMessage(editingMessage.id, messageInput);
+        }
+        setEditingMessage(null);
+        setMessageInput('');
+    };
+
+    React.useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [selectedChatId, selectedChat?.messages.length]);
+
     return (
-        <div className="flex h-screen bg-background">
+        <div className="flex h-full">
             {/* Sidebar */}
             <ChatSidebar
                 chats={chats}
@@ -212,6 +402,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 onNewChat={onNewChat}
                 onRefresh={onRefresh}
                 showConnectionStatus={showConnectionStatus}
+                connectionStatus={connectionStatus}
             />
 
             {/* Main chat area */}
@@ -242,6 +433,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                     <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
                                         <Video className="h-4 w-4" />
                                     </Button>
+                                    {selectedChat.isGroup && (
+                                        <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={handleShowMembers} title="Show Members">
+                                            <span className="sr-only">Show Members</span>
+                                            <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" strokeWidth="2" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4Zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4Z" /></svg>
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -293,20 +490,43 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         <div className="flex-1 flex flex-col min-h-0">
                             {activeTab === 'chat' && (
                                 <>
+                                    {/* Load previous messages button */}
+                                    {selectedChat && onLoadPrevious && (
+                                        <div className="flex justify-center py-2">
+                                            <Button size="sm" variant="ghost" onClick={() => onLoadPrevious(selectedChat.id)}>
+                                                Load previous messages
+                                            </Button>
+                                        </div>
+                                    )}
                                     <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={messagesContainerRef} onScroll={handleScroll}>
-                                        {selectedChat.messages.map((message) => (
-                                            <div key={message.id} id={`message-${message.id}`}>
-                                                <MessageBubble
-                                                    message={message}
-                                                    onReply={handleReply}
-                                                    onEdit={handleEdit}
-                                                    onDelete={handleDelete}
-                                                    onReact={handleReact}
-                                                    onReplyClick={handleReplyClick}
-                                                    isHighlighted={highlightedMessageId === message.id}
-                                                />
-                                            </div>
-                                        ))}
+                                        {[...messageList]
+                                            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                                            .map((message) => (
+                                                <div key={message.id || message.tempId} id={`message-${message.id || message.tempId}`}>
+                                                    <MessageBubble
+                                                        message={message}
+                                                        onReply={handleReply}
+                                                        onEdit={handleEdit}
+                                                        onDelete={handleDelete}
+                                                        onReact={handleReact}
+                                                        onReplyClick={handleReplyClick}
+                                                        isHighlighted={highlightedMessageId === message.id}
+                                                    />
+                                                    {message.isOwn && message.status === 'sending' && (
+                                                        <span className="text-xs text-muted-foreground ml-2">Sending...</span>
+                                                    )}
+                                                    {message.isOwn && message.status === 'failed' && onRetry && onCancel && (
+                                                        <span className="text-xs text-red-500 ml-2">
+                                                            Failed
+                                                            <Button size="sm" variant="ghost" onClick={() => onRetry(selectedChat.id, message.tempId!, message.content)}>Retry</Button>
+                                                            <Button size="sm" variant="ghost" onClick={() => onCancel(selectedChat.id, message.tempId!)}>Cancel</Button>
+                                                        </span>
+                                                    )}
+                                                    {message.isOwn && message.status === 'delivered' && (
+                                                        <span className="text-xs text-green-500 ml-2">Delivered</span>
+                                                    )}
+                                                </div>
+                                            ))}
                                         <div ref={messagesEndRef} />
                                     </div>
 
@@ -324,7 +544,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                     )}
 
                                     {/* Typing indicator */}
-                                    {selectedChat.typingUsers && selectedChat.typingUsers.length > 0 && (
+                                    {selectedChat.typingUsers && selectedChat.typingUsers.length > 0 && selectedChat.typingUsersUpdatedAt && (Date.now() - selectedChat.typingUsersUpdatedAt < 11000) && (
                                         <div className="border-t bg-background px-4 py-2">
                                             <div className="text-sm text-muted-foreground italic">
                                                 {selectedChat.typingUsers.length === 1
@@ -339,7 +559,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                     <ChatInput
                                         value={messageInput}
                                         onChange={setMessageInput}
-                                        onSend={handleSendMessage}
+                                        onSend={editingMessage ? handleEditMessage : handleSendMessage}
                                         onTyping={onTyping}
                                         replyTo={replyTo ? {
                                             id: replyTo.id,
@@ -352,8 +572,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                         } : undefined}
                                         onCancelReply={() => setReplyTo(null)}
                                         onCancelEdit={() => {
-                                            setEditingMessage(null)
-                                            setMessageInput('')
+                                            setEditingMessage(null);
+                                            setMessageInput('');
                                         }}
                                     />
                                 </>
@@ -393,6 +613,30 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         <Button variant="destructive" onClick={confirmDelete}>
                             Delete
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Members modal */}
+            <Dialog open={showMembersModal} onOpenChange={setShowMembersModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Group Members</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        {groupMembers.length === 0 ? (
+                            <div className="text-muted-foreground text-sm">No members found.</div>
+                        ) : (
+                            groupMembers.map(member => (
+                                <div key={member.id} className="flex flex-col border-b pb-2">
+                                    <span className="font-medium">{member.name}</span>
+                                    <span className="text-xs text-muted-foreground">{member.email}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowMembersModal(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

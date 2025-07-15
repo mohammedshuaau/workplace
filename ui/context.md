@@ -126,173 +126,60 @@ src/
 - Use TypeScript strictly for type safety
 - Follow React best practices and hooks patterns
 
-## Chat Interface Implementation
+---
 
-### Overview
-A comprehensive chat UI has been implemented on the HomePage with full messaging functionality, including real-time interactions, message management, and modern UI patterns.
+# Chat System: Mattermost Integration
 
-### Chat Components
-- **ChatInterface** (`src/components/chat/chat-interface.tsx`) - Main chat container with message display and input
-- **ChatSidebar** (`src/components/chat/chat-sidebar.tsx`) - Contact list with unread counts and online status
-- **MessageBubble** (`src/components/chat/message-bubble.tsx`) - Individual message display with reactions and interactions
-- **ChatInput** (`src/components/chat/chat-input.tsx`) - Message input with reply/edit banners and typing indicator
+## Overview
+The chat system has been fully migrated from Matrix/Dendrite to **Mattermost**. All chat operations, real-time updates, and user management are now handled via the Mattermost API. The UI and UX remain modern and user-friendly, with robust error handling and a clean, professional appearance.
 
-### Key Features Implemented
+## Key Features & Architecture
 
-#### Message System
-- **Message bubbles** with different styles for sent/received messages
-- **Avatar display** for each message with proper alignment
-- **Timestamp formatting** with relative time display
-- **Seen indicators** with user name popovers (no header text)
-- **Message reactions** with emoji popovers showing user names
-- **Reply functionality** with smooth scroll to original message and highlighting
-- **Edit mode** with banner and input field for message editing
-- **Context menus** (right-click) with edit, delete, reply options
-- **Hover interactions** with action icons (properly colored for visibility)
+### Chat Creation Flow
+- **Direct Message (DM):** If one user is selected, a DM channel is created (private between the two users).
+- **Named Private Group:** If two or more users are selected, a private channel is created with a required group name and a unique channel name (auto-generated from the display name, editable by the user).
+- **No public channels or group DMs**: All group chats are named, private, and require invitations.
 
-#### Chat Layout
-- **Full-screen layout** without container padding for immersive experience
-- **Responsive design** with proper flex layouts
-- **Chat header** with user avatar, designation, and call buttons
-- **Scroll to bottom button** that appears when scrolling up with smooth scroll
-- **Typing indicator** ("John Doe is typing...") near the input area
+### Chat Operations
+- **User Search:** Uses Mattermost API to search users by username, email, or display name, with debounce and robust error handling.
+- **Channel Creation:** Private channels are created for group chats, with custom names and display names. DMs use the direct channel endpoint.
+- **Message Sending & Fetching:** All messages are sent and fetched via the Mattermost API. Real-time updates are handled via WebSocket.
+- **Group Members:** Group members are fetched via the channel members endpoint and displayed in a modal with name and email for each member.
+- **Error Handling:** All API errors are surfaced to the user with clear, actionable messages using toast notifications.
 
-#### Sidebar Features
-- **Contact list** with avatars and names
-- **Unread message counts** (hidden when zero)
-- **Active chat highlighting**
-- **Last message preview**
-- **Online status indicators**
+### Sidebar & Chat UI Improvements
+- **Sidebar:**
+  - DMs show the other user's display name and email as a subtitle.
+  - Group chats show the group name.
+  - Bots, system users, and deleted users are excluded from DMs (unless explicitly included).
+  - Unread counts, last message preview, and active chat highlighting are supported.
+- **Group Members Modal:**
+  - For group chats, a "Show Members" button appears in the chat header.
+  - Clicking it opens a modal listing all members (name and email).
+  - Members are fetched live from the Mattermost API.
+- **Modern UI:**
+  - All UI is built with shadcn/ui, Tailwind CSS, and Radix UI for accessibility.
+  - Responsive, accessible, and clean design throughout.
 
-#### Interactive Elements
-- **Message input** with textarea and send button
-- **Reply banner** showing replied message content
-- **Edit banner** for message editing mode
-- **Send functionality** with Enter key support
-- **Smooth animations** and transitions throughout
+### Data Flow & Structure
+- **All chat data** (channels, messages, users) is loaded from the Mattermost API.
+- **User info** is fetched as needed for DMs and group member lists.
+- **No Matrix/Dendrite code remains**; all chat logic is Mattermost-based.
 
-### Data Structure
-```typescript
-interface Message {
-  id: string;
-  content: string;
-  sender: string;
-  timestamp: Date;
-  isOwn: boolean;
-  seen: boolean;
-  seenBy?: string[];
-  reactions?: { emoji: string; users: string[] }[];
-  replyTo?: Message;
-}
+### Real-Time & Error Handling
+- **WebSocket:** Real-time message updates are handled via the Mattermost WebSocket API.
+- **Error Handling:** All errors from the Mattermost API are caught and displayed to the user via toast notifications, with robust extraction of error messages.
 
-interface FileItem {
-  id: string;
-  name: string;
-  size: string;
-  type: 'document' | 'image' | 'video' | 'audio' | 'archive' | 'code' | 'other';
-  extension: string;
-  url: string;
-  sender: { id: string; name: string; avatar?: string };
-  timestamp: Date;
-  isOwn: boolean;
-}
+---
 
-interface MediaItem {
-  id: string;
-  name: string;
-  type: 'image' | 'video' | 'audio';
-  url: string;
-  thumbnail?: string;
-  size: string;
-  duration?: string;
-  sender: { id: string; name: string; avatar?: string };
-  timestamp: Date;
-  isOwn: boolean;
-}
+# Authentication System
 
-interface Chat {
-  id: string;
-  name: string;
-  avatar: string;
-  designation?: string;
-  lastMessage: string;
-  timestamp: Date;
-  unreadCount: number;
-  isOnline: boolean;
-  messages: Message[];
-  files: FileItem[];
-  media: MediaItem[];
-}
-```
+## Overview
+A comprehensive authentication system is implemented using TanStack Query for state management and clean service architecture.
 
-### Sample Data
-The chat includes extensive sample data with:
-- Multiple messages for testing scrolling
-- Message reactions with emojis and user names
-- Reply chains for testing reply functionality
-- Seen indicators with multiple users
-- Various message types and interactions
+## Services Architecture
 
-### UI/UX Features
-- **Modern design** with clean, professional appearance
-- **Proper hover states** and visual feedback
-- **Accessibility** considerations with ARIA labels
-- **Keyboard navigation** support
-- **Responsive breakpoints** for different screen sizes
-- **Consistent spacing** and typography throughout
-
-### Update (2024-06-09)
-- The chat window now features three tabs: **Chat**, **Files**, and **Media**.
-    - **Chat**: Standard messaging interface with all previous features.
-    - **Files**: Shows all files shared in the chat, with sender name, sent date/time, file type icon, and download/preview actions.
-    - **Media**: Shows all images, videos, and audio shared in the chat, with sender info, sent date/time, media preview, download, and play (for audio/video).
-- Only the Chat tab displays the message input and typing indicator at the bottom; Files and Media tabs are for browsing shared content.
-- The chat area layout is now fully responsive and scrollable, with the input always visible at the bottom of the Chat tab.
-
-### Update (2024-12-19)
-- **Chat Sidebar Options Menu**: Added a three-dots icon next to the "Chats" heading that opens a popover menu with:
-  - **Refresh Chats** button with refresh icon for reloading chat history
-  - **Connection Status** embedded component showing Matrix server status, error messages, and reconnect/test connection options
-- **Clean UI**: Removed the refresh button and connection status from the top-right corner of the home page
-- **Code Cleanup**: Removed all console.log statements from the codebase for production-ready code
-- **Enhanced Connection Status**: Created `ConnectionStatusEmbedded` component that can be used inside other popovers without creating nested popovers
-- **Improved UX**: The options menu only appears when refresh or connection status functions are available, keeping the UI clean when not needed
-
-### Update (2024-12-19) - Matrix Message Editing
-- **Real Matrix Edit Implementation**: Implemented proper Matrix protocol message editing using `m.relates_to.rel_type: 'm.replace'` and `m.new_content` structures
-- **Server-Side Edits**: Edit events are sent to Matrix server with proper Matrix specification compliance
-- **Cross-Client Compatibility**: Edit relationships are stored on Matrix server and visible to other Matrix clients (Element, etc.)
-- **Message Ordering Fix**: Fixed message display order to show messages chronologically (oldest first) instead of reversed
-- **Edit Event Handling**: Properly merge edit events with original messages during room data loading to prevent duplicates
-- **UI Edit Indicators**: Added "(edited)" indicator next to timestamp for edited messages
-- **Edit State Management**: Chat interface handles edit mode with proper state management and input field reuse
-- **Reply Preservation**: Edit functionality preserves reply relationships when editing replied messages
-- **Real-time Edit Updates**: Edited messages update in real-time across all connected clients
-- **Matrix Protocol Compliance**: Uses official Matrix specification for message editing with proper event relationships
-- Data structures for files and media have been added to each chat object.
-
-## Last Updated
-- Initial setup with Vite + React + TypeScript
-- shadcn/ui installation and configuration
-- TanStack Router and Query setup
-- Environment variables configuration
-- Import aliases setup
-- Chat UI development completed with full feature set
-- Enhanced chat features: reactions, edit mode, seen indicators with popovers, full-screen layout
-- Complete chat interface with message bubbles, sidebar, input, reactions, replies, edit mode, and smooth scrolling
-- Authentication verification via `/auth/me` endpoint for secure token validation
-- Matrix authentication integration with automatic storage and retrieval
-- Matrix/Dendrite real-time messaging integration with live chat functionality
-- New chat modal with user search and direct message creation 
-
-## Authentication System
-
-### Overview
-A comprehensive authentication system has been implemented using TanStack Query for state management and clean service architecture.
-
-### Services Architecture
-
-#### Directory Structure
+### Directory Structure
 ```
 src/
 ├── contexts/
@@ -304,19 +191,19 @@ src/
 │   ├── auth/
 │   │   ├── login.tsx       # Login page
 │   │   └── register.tsx    # Register page
-│   └── home-page.tsx       # Protected home page (renamed)
+│   └── home-page.tsx       # Protected home page
 └── lib/
     └── router.tsx          # Updated with auth routes
 ```
 
-#### API Service (`src/services/api.ts`)
+### API Service (`src/services/api.ts`)
 - **Base HTTP client** with automatic token management
 - **Error handling** with proper TypeScript interfaces
 - **HTTP methods**: GET, POST, PUT, DELETE, PATCH
 - **Authorization headers** automatically added from localStorage
 - **Environment variable** integration with `VITE_API_BASE_URL`
 
-#### Auth Service (`src/services/auth.ts`)
+### Auth Service (`src/services/auth.ts`)
 - **TanStack Query mutations** for login, register, and logout
 - **TanStack Query hook** for `/auth/me` endpoint to verify authentication
 - **Type-safe interfaces** for User, LoginCredentials, RegisterCredentials, MatrixAuth
@@ -340,8 +227,8 @@ src/
 - **shadcn/ui components** with Tailwind styling
 
 ### API Endpoints
-- **POST** `/auth/login` - User login with email/password (returns Matrix auth data)
-- **POST** `/auth/register` - User registration with name/email/password/role (returns Matrix auth data)
+- **POST** `/auth/login` - User login with email/password (returns Mattermost auth data)
+- **POST** `/auth/register` - User registration with name/email/password/role (returns Mattermost auth data)
 - **GET** `/auth/me` - Verify authentication status and get current user data
 
 ### Data Structures
@@ -353,7 +240,7 @@ interface User {
   role: 'USER' | 'ADMIN';
 }
 
-interface MatrixAuth {
+interface MattermostAuth {
   userId: string;
   accessToken: string;
   deviceId: string;
@@ -376,7 +263,7 @@ interface AuthResponse {
   message: string;
   user: User;
   token: string;
-  matrix?: MatrixAuth;
+  mattermost?: MattermostAuth;
 }
 ```
 
@@ -427,63 +314,14 @@ interface AuthResponse {
 #### Authentication Flow
 1. **App startup** - AuthContext checks localStorage for existing token and calls `/auth/me` to verify
 2. **Token validation** - If token exists, `/auth/me` endpoint validates it with the server
-3. **Matrix authentication** - Matrix auth data is stored and retrieved alongside user authentication
+3. **Mattermost authentication** - Mattermost auth data is stored and retrieved alongside user authentication
 4. **Invalid token handling** - If token is invalid, localStorage is cleared and user is logged out
 5. **Route access** - HOCs check authentication status
 6. **Automatic redirects** - To login if not authenticated, to home if already authenticated
 7. **Loading states** - While checking authentication
 8. **Clean components** - No auth logic in page components
 
-### Updated File Structure
-```
-src/
-├── components/
-│   ├── guards/
-│   │   ├── with-auth.tsx     # HOC for protected routes
-│   │   ├── with-guest.tsx    # HOC for guest-only routes
-│   │   └── auth-wrappers.tsx # Type-safe router components
-│   └── chat/                 # Chat interface components
-│       ├── chat-interface.tsx
-│       ├── chat-sidebar.tsx
-│       ├── chat-input.tsx
-│       ├── message-bubble.tsx
-│       ├── files-tab.tsx
-│       ├── media-tab.tsx
-│       └── new-chat-modal.tsx
-├── contexts/
-│   ├── auth-context.tsx      # Global authentication state
-│   └── matrix-context.tsx    # Matrix client state management
-├── services/
-│   ├── api.ts                # Base API service
-│   ├── auth.ts               # Auth service with TanStack Query
-│   └── matrix.ts             # Matrix client service
-├── types/
-│   └── auth.ts               # Auth-related type definitions
-├── pages/
-│   ├── auth/
-│   │   ├── login.tsx         # Login page
-│   │   └── register.tsx      # Register page
-│   └── home-page.tsx         # Matrix-powered chat interface
-└── lib/
-    └── router.tsx            # Routes with protection applied
-```
-
-### Type Organization
-- **`src/types/auth.ts`** - All authentication-related interfaces
-- **Type-only imports** - Using `import type` for interfaces
-- **Centralized types** - All types in dedicated folder
-
-### Import Patterns
-```typescript
-// Import types
-import type { User, AuthResponse } from '@/types/auth';
-
-// Import services
-import { authService, useLogin } from '@/services/auth';
-import { useAuth } from '@/contexts/auth-context';
-```
-
-### Usage Examples
+#### Usage Examples
 ```typescript
 // For any new protected route:
 const ProtectedComponent = withAuth(SomeComponent);
@@ -499,154 +337,27 @@ const someRoute = createRoute({
 })
 ```
 
-### Authentication Integration
-- **AuthProvider** wraps the entire app in `main.tsx`
-- **TanStack Query** for API state management
-- **TanStack Router** for navigation and route protection
-- **Context API** for global auth state
-- **TypeScript** for type safety throughout
-- **Route guards** for scalable protection
+---
 
-## Matrix/Dendrite Integration
+# Recent Chat System Migration & Improvements
 
-### Overview
-Complete Matrix client integration with Dendrite server for real-time messaging, room management, and live chat functionality.
+## Migration from Matrix to Mattermost
+- **All Matrix/Dendrite code has been removed.**
+- **Mattermost** is now the sole backend for chat, messaging, and user management.
+- All chat features, real-time updates, and user management are handled via the Mattermost API and WebSocket.
 
-### Matrix Service (`src/services/matrix.ts`)
-- **Matrix client initialization** with authentication data
-- **Real-time message handling** with event listeners
-- **Room management** (join, create, list rooms)
-- **Message sending** with reply support
-- **Type-safe interfaces** for Matrix messages and rooms
-- **Automatic reconnection** and error handling
-- **Rate limiting protection** with request throttling and queuing
-- **Message deletion handling** with proper redaction support
-- **Typing indicators** with debouncing and throttling
-- **Unread count management** with real-time updates
-- **Read receipts** for marking rooms as read
+## Modern Chat Experience
+- **Named private groups** for all group chats (no unnamed group DMs).
+- **Direct messages** for 1:1 conversations.
+- **Group members modal** with live member info (name, email).
+- **Sidebar and chat UI** show correct names, emails, and avatars.
+- **Bots, system users, and deleted users** are excluded from DMs and group member lists unless explicitly included.
+- **All code is clean, type-safe, and follows modern React and TypeScript best practices.**
 
-### Matrix Context (`src/contexts/matrix-context.tsx`)
-- **Global Matrix state management** with React Context
-- **Real-time message updates** with automatic UI synchronization
-- **Room selection** and management
-- **Connection status** monitoring
-- **Message sending** with reply support
-- **Automatic initialization** when Matrix auth is available
-- **Typing indicator management** with real-time updates
-- **Unread count tracking** with automatic updates
-- **Read receipt handling** for marking rooms as read
+---
 
-### Key Features Implemented
-
-#### Real-time Messaging
-- **Live message synchronization** from Matrix server
-- **Automatic UI updates** when new messages arrive
-- **Message sending** with proper error handling
-- **Reply functionality** with Matrix event relations
-- **Message history** loading from Matrix timeline
-- **Message editing** with Matrix protocol compliance
-- **Message deletion** with redaction support
-- **Empty message filtering** to prevent spam from deleted messages
-
-#### Room Management
-- **Room listing** from Matrix server
-- **Room joining** functionality
-- **Room creation** with public/private options
-- **Room metadata** (name, avatar, member count)
-- **Unread message counts** from Matrix notifications
-- **Automatic room invitation acceptance**
-- **Direct message creation** with user search
-
-#### Connection Management
-- **Automatic connection** when Matrix auth is available
-- **Connection status** monitoring and display
-- **Reconnection logic** for network issues
-- **Clean disconnection** on logout
-- **Loading states** during connection
-- **Rate limiting protection** with automatic retry
-- **Network error handling** with graceful degradation
-
-#### UI Integration
-- **Seamless chat interface** with Matrix data
-- **Real-time message bubbles** with proper formatting
-- **Online indicator** when Matrix is connected
-- **Loading states** during Matrix operations
-- **Error handling** with user feedback
-- **New chat button** in sidebar for starting conversations
-- **User search modal** with Matrix user directory integration
-- **Direct message creation** with automatic room creation
-- **Typing indicators** with real-time updates
-- **Unread count badges** with automatic updates
-- **Read receipt handling** for proper message status
-
-### Matrix Data Flow
-1. **Authentication** - Matrix auth data from server login
-2. **Client initialization** - Matrix client connects to Dendrite
-3. **Room loading** - Fetch and display user's rooms
-4. **Message synchronization** - Real-time message updates
-5. **UI updates** - Automatic chat interface updates
-6. **Message sending** - Send messages through Matrix client
-7. **Typing indicators** - Real-time typing status updates
-8. **Unread counts** - Automatic badge updates
-9. **Read receipts** - Mark rooms as read when selected
-
-### Matrix Event Handling
-- **Timeline events** - New messages in rooms
-- **Membership events** - Room join/leave notifications
-- **Message events** - Text message handling
-- **Reply events** - Message reply relationships
-- **Avatar events** - User avatar updates
-- **Typing events** - Real-time typing indicators
-- **Redaction events** - Message deletion handling
-- **Edit events** - Message editing with Matrix protocol
-
-### Error Handling
-- **Connection failures** - Automatic retry logic
-- **Authentication errors** - Clear error messages
-- **Message send failures** - User notification
-- **Network issues** - Graceful degradation
-- **Invalid data** - Safe fallbacks
-- **Rate limiting** - Automatic retry with backoff
-- **Empty messages** - Filtering of deleted message spam
-
-### Performance Optimizations
-- **Efficient message rendering** with React keys
-- **Minimal re-renders** with proper state management
-- **Memory management** with cleanup on unmount
-- **Network optimization** with connection pooling
-- **UI responsiveness** with async operations
-- **Request throttling** to prevent rate limiting
-- **Debounced typing** to reduce API calls
-- **Message filtering** to prevent empty message spam
-
-### Recent Updates (2024-12-19)
-- **Real-time messaging** - Messages now appear instantly across all connected clients
-- **Typing indicators** - Real-time typing status with proper debouncing and throttling
-- **Unread count updates** - Automatic badge updates when new messages arrive
-- **Read receipts** - Rooms are marked as read when selected
-- **Message deletion handling** - Proper filtering of deleted messages to prevent empty content spam
-- **Rate limiting protection** - Request queuing and throttling to prevent Matrix server overload
-- **Network error handling** - Graceful handling of connection issues and automatic retry
-- **Enhanced logging** - Detailed console logs for debugging message flow and sync status
-- **Connection status monitoring** - Real-time connection health checks and status display
-
-### Latest Progress (2024-12-19 Evening)
-- **Real-time messaging working** - Messages are being sent and received in real-time across different accounts
-- **Typing indicators implemented** - Added proper typing event listeners and handling with debouncing
-- **Unread count updates** - Added real-time unread count tracking and updates
-- **Read receipts** - Implemented marking rooms as read when selected
-- **Empty message filtering** - Fixed issue where deleted messages were showing as empty content
-- **Enhanced error handling** - Better handling of redacted messages and network issues
-- **Rate limiting protection** - Request queuing and throttling to prevent Matrix server overload
-- **Connection monitoring** - Real-time connection status and health checks
-
-### Testing Status
-- ✅ **Message sending** - Messages are sent successfully and appear in real-time
-- ✅ **Message receiving** - Messages from other users appear instantly
-- ✅ **Room management** - Rooms are loaded and managed properly
-- ✅ **Connection handling** - Matrix client connects and stays connected
-- 🔄 **Typing indicators** - Implementation complete, testing in progress
-- 🔄 **Unread counts** - Implementation complete, testing in progress
-- ✅ **Message editing** - Edit functionality works with Matrix protocol
-- ✅ **Message deletion** - Deletion works with proper redaction
-- ✅ **Empty message filtering** - Deleted messages are properly filtered out 
+# Last Updated
+- Migration to Mattermost complete
+- Modern chat UI with group member modal, correct DM/group naming, and robust error handling
+- All chat operations, user search, and real-time updates via Mattermost API
+- Clean, professional codebase with strict TypeScript and ESLint compliance 

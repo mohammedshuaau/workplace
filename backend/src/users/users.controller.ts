@@ -1,10 +1,13 @@
-import { Controller, Get, Query, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, HttpException, HttpStatus, Post, Body } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UsersService } from './users.service';
 import { UserTransformer } from './transformers/user.transformer';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import * as bcrypt from 'bcrypt';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 /**
  * Controller for user management operations
@@ -19,7 +22,7 @@ export class UsersController {
   ) {}
 
   /**
-   * Searches for users who have Matrix user IDs
+   * Searches for users by name or email
    * @param query - Search query for name or email
    * @param page - Page number for pagination
    * @param limit - Number of users per page
@@ -99,5 +102,42 @@ export class UsersController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  /**
+   * Allows an authenticated user to change their password (syncs with Mattermost)
+   */
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    // Verify old password
+    const dbUser = await this.usersService.prisma.user.findUnique({ where: { id: user.userId } });
+    if (!dbUser) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+    const isPasswordValid = await bcrypt.compare(dto.oldPassword, dbUser.password);
+    if (!isPasswordValid) {
+      throw new HttpException('Old password is incorrect', HttpStatus.UNAUTHORIZED);
+    }
+    // Update password in app and Mattermost
+    await this.usersService.updatePassword(user.userId, dto.newPassword);
+    return { message: 'Password updated successfully' };
+  }
+
+  /**
+   * Allows an authenticated user to update their profile (syncs with Mattermost)
+   */
+  @Post('update-profile')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    // Update in app
+    const updatedUser = await this.usersService.updateProfile(user.userId, dto);
+    return updatedUser;
   }
 } 

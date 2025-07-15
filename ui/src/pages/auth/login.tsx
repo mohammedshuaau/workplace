@@ -20,7 +20,7 @@ export const LoginPage: React.FC = () => {
             { email, password },
             {
                 onSuccess: (data) => {
-                    login(data.token, data.user, data.matrix);
+                    login(data.token, data.user, data.mattermost);
                     navigate({ to: '/' });
                 },
             }

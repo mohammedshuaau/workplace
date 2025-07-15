@@ -1,5 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MattermostService, MattermostUser } from '../mattermost/mattermost.service';
+import * as bcrypt from 'bcrypt';
 
 /**
  * Service for managing users and user search operations
@@ -7,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(public prisma: PrismaService, private mattermostService: MattermostService) {}
 
   /**
    * Searches for users who have Matrix user IDs
@@ -54,7 +56,6 @@ export class UsersService {
           email: true,
           name: true,
           role: true,
-          matrixUserId: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -92,7 +93,6 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
-        matrixUserId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -103,5 +103,70 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  /**
+   * Updates a user's password in the app and Mattermost
+   * @param userId - App user ID
+   * @param newPassword - New password
+   * @returns Promise<void>
+   */
+  async updatePassword(userId: number, newPassword: string): Promise<void> {
+    // Update password in app
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+    // Sync password to Mattermost (assume email as loginId)
+    try {
+      // Find Mattermost user by email
+      const mmUser = await this.mattermostService.getUserByEmail(user.email);
+      if (mmUser && mmUser.id) {
+        await this.mattermostService.updateUserPassword(mmUser.id, newPassword);
+      }
+    } catch (error) {
+      // Optionally: log error or throw
+      throw new HttpException(
+        `Password updated in app, but failed to update in Mattermost: ${error.message || error}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Updates a user's profile in the app and Mattermost
+   * @param userId - App user ID
+   * @param dto - Profile update data
+   * @returns Promise<any>
+   */
+  async updateProfile(userId: number, dto: { name?: string; email?: string }): Promise<any> {
+    // Update in app
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.name ? { name: dto.name } : {}),
+        ...(dto.email ? { email: dto.email } : {}),
+      },
+    });
+    // Sync to Mattermost
+    let mattermost: MattermostUser | undefined = undefined;
+    try {
+      const mmUser = await this.mattermostService.getUserByEmail(updatedUser.email);
+      if (mmUser && mmUser.id) {
+        await this.mattermostService.updateUserProfile(mmUser.id, dto);
+        const synced = await this.mattermostService.getUserByEmail(updatedUser.email);
+        if (synced && synced.id) {
+          mattermost = synced;
+        }
+      }
+    } catch (error) {
+      // Optionally: log error
+    }
+    return {
+      message: 'Profile updated successfully',
+      user: updatedUser,
+      ...(mattermost ? { mattermost } : {}),
+    };
   }
 } 

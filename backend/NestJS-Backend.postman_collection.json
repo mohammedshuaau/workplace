@@ -176,6 +176,41 @@
                         "description": "Get current authenticated user profile (requires JWT token)"
                     },
                     "response": []
+                },
+                {
+                    "name": "Change Password",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"oldPassword\": \"user123\",\n  \"newPassword\": \"newpassword123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/change-password",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "change-password"
+                            ]
+                        },
+                        "description": "Change the password for the current user (syncs with Mattermost). Requires JWT token."
+                    },
+                    "response": []
                 }
             ],
             "description": "Authentication endpoints for user registration, login, and profile management"

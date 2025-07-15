@@ -5,7 +5,6 @@ interface UserData {
   email: string;
   name: string | null;
   role: string;
-  matrixUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -14,7 +13,6 @@ export interface UserResource {
   email: string;
   name: string | null;
   role: string;
-  matrixUserId: string | null;
 }
 
 export class UserTransformer extends BaseTransformer<UserData, UserResource> {
@@ -23,7 +21,6 @@ export class UserTransformer extends BaseTransformer<UserData, UserResource> {
       email: item.email,
       name: item.name,
       role: item.role,
-      matrixUserId: item.matrixUserId,
     };
   }
 } 

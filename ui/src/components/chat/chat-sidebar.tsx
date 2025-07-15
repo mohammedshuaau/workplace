@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Plus, MoreVertical, RefreshCw, Wifi, WifiOff, AlertCircle, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ConnectionStatusEmbedded } from '@/components/ui/connection-status'
 
 interface Chat {
     id: string
@@ -15,6 +14,7 @@ interface Chat {
     unreadCount?: number
     isGroup: boolean
     typingUsers?: string[]
+    email?: string // Add email for DMs
 }
 
 interface ChatSidebarProps {
@@ -24,6 +24,7 @@ interface ChatSidebarProps {
     onNewChat?: () => void
     onRefresh?: () => void
     showConnectionStatus?: boolean
+    connectionStatus?: 'connecting' | 'online' | 'offline' | 'syncing';
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({
@@ -33,12 +34,34 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     onNewChat,
     onRefresh,
     showConnectionStatus = false,
+    connectionStatus = 'online',
 }) => {
     return (
         <div className="w-80 border-r bg-background">
             <div className="p-4 border-b">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">Chats</h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold">Chats</h2>
+                        {showConnectionStatus && (
+                            <span className="flex items-center gap-1 ml-2">
+                                <span
+                                    className={
+                                        connectionStatus === 'online' ? 'bg-green-500' :
+                                            connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+                                                connectionStatus === 'syncing' ? 'bg-blue-500 animate-pulse' :
+                                                    'bg-red-500'
+                                    }
+                                    style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block' }}
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {connectionStatus === 'online' && 'Online'}
+                                    {connectionStatus === 'connecting' && 'Connecting...'}
+                                    {connectionStatus === 'syncing' && 'Syncing...'}
+                                    {connectionStatus === 'offline' && 'Offline'}
+                                </span>
+                            </span>
+                        )}
+                    </div>
                     <div className="flex items-center gap-2">
                         {onNewChat && (
                             <Button
@@ -78,11 +101,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                                             </Button>
                                         )}
 
-                                        {showConnectionStatus && (
-                                            <div className="pt-2 border-t">
-                                                <ConnectionStatusEmbedded />
-                                            </div>
-                                        )}
                                     </div>
                                 </PopoverContent>
                             </Popover>
@@ -116,7 +134,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                                         {chat.lastMessageTime}
                                     </span>
                                 </div>
-
+                                {chat.email && !chat.isGroup && (
+                                    <div className="text-xs text-muted-foreground truncate">{chat.email}</div>
+                                )}
                                 <div className="flex items-center justify-between mt-1">
                                     <p className="text-sm text-muted-foreground truncate">
                                         {chat.typingUsers && chat.typingUsers.length > 0

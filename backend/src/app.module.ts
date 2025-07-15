@@ -3,13 +3,13 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { SampleModule } from './sample/sample.module';
 import { CoreModule } from './core/core.module';
-import { MatrixModule } from './matrix/matrix.module';
 import { UsersModule } from './users/users.module';
 import { APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { environmentSchema } from '../env';
 import { ConfigModule } from '@nestjs/config';
 import { parseEnv } from "znv";
+import { MattermostModule } from './mattermost/mattermost.module';
 
 @Module({
   imports: [
@@ -20,8 +20,8 @@ import { parseEnv } from "znv";
     AuthModule,
     SampleModule,
     CoreModule,
-    MatrixModule,
     UsersModule,
+    MattermostModule,
   ],
   providers: [
     {

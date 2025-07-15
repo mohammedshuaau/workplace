@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useMe } from '@/services/auth';
-import type { User, MatrixAuth } from '@/types/auth';
+import type { User, MattermostAuth } from '@/types/auth';
+import { mattermostService } from '@/services/mattermost';
 
 interface AuthContextType {
     user: User | null;
-    matrixAuth: MatrixAuth | null;
+    mattermost: MattermostAuth | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    login: (token: string, user: User, matrixAuth?: MatrixAuth) => void;
+    login: (token: string, user: User, mattermost?: MattermostAuth) => void;
     logout: () => void;
 }
 
@@ -27,7 +28,7 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
-    const [matrixAuth, setMatrixAuth] = useState<MatrixAuth | null>(null);
+    const [mattermost, setMattermost] = useState<MattermostAuth | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     // Use TanStack Query to verify authentication
@@ -37,83 +38,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check for existing auth on mount
         const token = localStorage.getItem('token');
         const userStr = localStorage.getItem('user');
-        const matrixStr = localStorage.getItem('matrix');
+        const mmStr = localStorage.getItem('mattermost');
 
         if (token && userStr) {
             try {
                 const userData = JSON.parse(userStr);
                 setUser(userData);
             } catch (error) {
-                // Invalid user data, clear storage
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
-                localStorage.removeItem('matrix');
+                localStorage.removeItem('mattermost');
                 setUser(null);
-                setMatrixAuth(null);
+                setMattermost(null);
             }
         }
-
-        if (matrixStr) {
+        if (mmStr) {
             try {
-                const matrixData = JSON.parse(matrixStr);
-                setMatrixAuth(matrixData);
+                const mm = JSON.parse(mmStr);
+                setMattermost(mm);
             } catch (error) {
-                // Invalid matrix data, clear storage
-                localStorage.removeItem('matrix');
-                setMatrixAuth(null);
+                localStorage.removeItem('mattermost');
+                setMattermost(null);
             }
         }
-
         setIsLoading(false);
     }, []);
 
     // Handle me query results
     useEffect(() => {
         if (meData?.user) {
-            // Update user data from server
             setUser(meData.user);
             localStorage.setItem('user', JSON.stringify(meData.user));
-
-            // Update matrix auth if provided
-            if (meData.matrix) {
-                setMatrixAuth(meData.matrix);
-                localStorage.setItem('matrix', JSON.stringify(meData.matrix));
+            if (meData.mattermost) {
+                setMattermost(meData.mattermost);
+                localStorage.setItem('mattermost', JSON.stringify(meData.mattermost));
             }
         } else if (meError) {
-            // Token is invalid, clear storage
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            localStorage.removeItem('matrix');
+            localStorage.removeItem('mattermost');
             setUser(null);
-            setMatrixAuth(null);
+            setMattermost(null);
         }
     }, [meData, meError]);
 
-    const login = (token: string, userData: User, matrixAuthData?: MatrixAuth) => {
+    const login = (token: string, userData: User, mattermostData?: MattermostAuth) => {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-
-        if (matrixAuthData) {
-            localStorage.setItem('matrix', JSON.stringify(matrixAuthData));
-            setMatrixAuth(matrixAuthData);
+        if (mattermostData) {
+            localStorage.setItem('mattermost', JSON.stringify(mattermostData));
+            setMattermost(mattermostData);
         }
     };
 
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        localStorage.removeItem('matrix');
+        localStorage.removeItem('mattermost');
         setUser(null);
-        setMatrixAuth(null);
+        setMattermost(null);
     };
 
-    // Show loading while checking authentication
     const isLoadingAuth = isLoading || (!!localStorage.getItem('token') && meLoading);
 
     const value: AuthContextType = {
         user,
-        matrixAuth,
+        mattermost,
         isAuthenticated: !!user,
         isLoading: isLoadingAuth,
         login,

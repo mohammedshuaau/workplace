@@ -85,14 +85,22 @@ Create a `.env` file in the root directory:
 DATABASE_URL="postgresql://username:password@localhost:5432/database_name"
 JWT_SECRET="your-super-secret-jwt-key"
 HTTP_PORT=3000
-MATRIX_SERVER_URL="http://dendrite:8008"
-MATRIX_SHARED_SECRET="dendrite-secret-key-2025"
+MATTERMOST_SERVER_URL="https://chat.example.com"
+MATTERMOST_ADMIN_TOKEN="your-mattermost-admin-token"
+MATTERMOST_DEFAULT_TEAM="team-name-or-id"
 ```
 
 ### Environment Validation
 - Uses `znv` for type-safe environment validation
 - Validates all required variables on startup
 - Provides clear error messages for missing/invalid env vars
+
+### Mattermost Integration
+- User registration in the app also creates the user in Mattermost and adds them to the default team.
+- User login retrieves a Mattermost session token and stores it in the app database.
+- Password changes in the app are synced to Mattermost.
+- Profile updates (name, email) in the app are synced to Mattermost.
+- All Mattermost API calls use the admin token for provisioning and updates.
 
 ## 🗄️ Database Schema
 
@@ -200,33 +208,6 @@ npx prisma migrate reset --force
 ### User Management Endpoints
 - `GET /api/v1/users/search` - Search users with Matrix IDs (ADMIN only)
 - `GET /api/v1/users/:id` - Get specific user by ID (ADMIN only)
-
-### Matrix Authentication
-- **Unified Authentication**: Single login provides both JWT and Matrix credentials
-- **Automatic Matrix User Creation**: Matrix users are created automatically during registration
-- **Credential Storage**: Matrix credentials are stored securely in the database
-- **Fallback Handling**: Application continues to work even if Matrix server is unavailable
-- **Matrix SDK Integration**: Uses `matrix-js-sdk` for server-side Matrix operations
-
-### Matrix Response Format
-```typescript
-{
-  message: string,
-  user: {
-    id: number,
-    email: string,
-    name: string,
-    role: string,
-  },
-  token: string, // JWT token
-  matrix: {
-    userId: string,      // @user:matrix.pension.test
-    accessToken: string, // Matrix access token
-    deviceId: string,    // Matrix device ID
-    serverUrl: string,   // Matrix server URL
-  } | null
-}
-```
 
 ## ✅ Validation System
 
@@ -407,12 +388,6 @@ export class CoreModule {}
 6. Add module to app.module.ts
 7. Update this CONTEXT.md file
 
-### Matrix Integration
-- Matrix authentication is automatically handled during user registration and login
-- Matrix credentials are stored in the User model
-- The MatrixService handles all Matrix server communication
-- Failed Matrix operations don't prevent application authentication
-
 ### Adding New Endpoints
 1. Create/update Zod DTOs
 2. Add service method
@@ -451,6 +426,7 @@ export class CoreModule {}
 - Ensure all environment variables are set
 - Use proper JWT secrets in production
 - Configure database connection properly
+- `MATTERMOST_SERVER_URL`, `MATTERMOST_ADMIN_TOKEN`, and `MATTERMOST_DEFAULT_TEAM` must be set in the environment.
 
 ### Database Migrations
 - Run migrations before deployment
@@ -491,14 +467,16 @@ export class CoreModule {}
 - `src/auth/auth.controller.ts` - Auth endpoints
 - `src/auth/guards/` - Authentication guards
 - `src/auth/strategies/jwt.strategy.ts` - JWT validation
-- `src/matrix/matrix.service.ts` - Matrix authentication service
-- `src/matrix/matrix.module.ts` - Matrix module configuration
 
 ### User Management
 - `src/users/users.controller.ts` - User search and detail endpoints
 - `src/users/users.service.ts` - User search business logic
 - `src/users/users.module.ts` - Users module configuration
 - `src/users/transformers/user.transformer.ts` - User data transformation
+
+### Mattermost
+- `src/mattermost/mattermost.service.ts` - Mattermost integration service
+- `src/mattermost/mattermost.module.ts` - Mattermost module configuration
 
 ### Database
 - `src/prisma/prisma.service.ts` - Database client

@@ -1,25 +1,38 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiService } from './api';
-import type { User, LoginCredentials, RegisterCredentials, AuthResponse, MatrixAuth } from '@/types/auth';
+import type { User, LoginCredentials, RegisterCredentials, AuthResponse } from '@/types/auth';
+import type { MattermostAuth } from '@/types/auth';
 
 // Auth service functions
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return apiService.post<AuthResponse>('/auth/login', credentials);
+    const res = await apiService.post<AuthResponse>('/auth/login', credentials);
+    if (res.mattermost) {
+      localStorage.setItem('mattermost', JSON.stringify(res.mattermost));
+    }
+    return res;
   },
 
   async register(credentials: RegisterCredentials): Promise<AuthResponse> {
-    return apiService.post<AuthResponse>('/auth/register', credentials);
+    const res = await apiService.post<AuthResponse>('/auth/register', credentials);
+    if (res.mattermost) {
+      localStorage.setItem('mattermost', JSON.stringify(res.mattermost));
+    }
+    return res;
   },
 
   async me(): Promise<AuthResponse> {
-    return apiService.get<AuthResponse>('/auth/me');
+    const res = await apiService.get<AuthResponse>('/auth/me');
+    if (res.mattermost) {
+      localStorage.setItem('mattermost', JSON.stringify(res.mattermost));
+    }
+    return res;
   },
 
   async logout(): Promise<void> {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('matrix');
+    localStorage.removeItem('mattermost');
   },
 
   getCurrentUser(): User | null {
@@ -31,26 +44,13 @@ export const authService = {
     return localStorage.getItem('token');
   },
 
-  getMatrixAuth(): MatrixAuth | null {
-    const matrixStr = localStorage.getItem('matrix');
-    return matrixStr ? JSON.parse(matrixStr) : null;
+  getMattermostAuth(): MattermostAuth | null {
+    const mmStr = localStorage.getItem('mattermost');
+    return mmStr ? JSON.parse(mmStr) : null;
   },
 
   isAuthenticated(): boolean {
     return !!this.getToken();
-  },
-
-  // Utility function to get Matrix auth data
-  getMatrixAuthData(): { userId: string; accessToken: string; deviceId: string; serverUrl: string } | null {
-    const matrixAuth = this.getMatrixAuth();
-    if (!matrixAuth) return null;
-    
-    return {
-      userId: matrixAuth.userId,
-      accessToken: matrixAuth.accessToken,
-      deviceId: matrixAuth.deviceId,
-      serverUrl: matrixAuth.serverUrl,
-    };
   },
 };
 
