@@ -4,6 +4,9 @@ import type { Channel } from '@mattermost/types/channels';
 import type { Post } from '@mattermost/types/posts';
 import type { MattermostAuth } from '@/types/auth';
 import type { Team } from '@mattermost/types/teams';
+import { authService } from './auth';
+import { toast } from 'sonner';
+import { useNavigate } from '@tanstack/react-router';
 
 const serverUrl = import.meta.env.VITE_MATTERMOST_SERVER_URL;
 
@@ -59,23 +62,31 @@ export class MattermostService {
       }));
     };
     this.ws.onmessage = (event) => {
-      console.log('WebSocket: Received message', event.data);
       try {
         const msg = JSON.parse(event.data);
-        // Optionally handle ping/pong
-        if (msg.type === 'ping') {
-          // Optionally respond with pong
-          this.ws?.send(JSON.stringify({ type: 'pong' }));
-          console.log('WebSocket: Sent pong');
+        // Handle WebSocket authentication errors
+        if (msg.type === 'error' && (
+          (msg.data && msg.data.request_id === 'authentication_challenge') ||
+          (msg.data && msg.data.error && msg.data.error.toLowerCase().includes('authentication')) ||
+          (msg.data && msg.data.error && msg.data.error.toLowerCase().includes('session'))
+        )) {
+          handleMattermostError({ status: 401, message: msg.data?.error || 'WebSocket authentication failed' });
           return;
         }
-        // Notify all listeners with the event type and full message
+        // Optionally handle ping/pong
+        if (msg.type === 'ping') {
+          this.ws?.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
         this.wsListeners.forEach(fn => fn(msg));
       } catch (e) {
         // Ignore parse errors
       }
     };
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
+      if (event.code === 4001) {
+        handleMattermostError({ status: 401, message: 'WebSocket authentication failed' });
+      }
       if (this.wsShouldReconnect) {
         setTimeout(() => this.connectWebSocket(), this.wsReconnectDelay);
       }
@@ -131,9 +142,13 @@ export class MattermostService {
    * Fetch posts in a channel (DM)
    */
   async getPosts(channelId: string, page = 0, perPage = 30): Promise<Post[]> {
-    const res = await this.client.getPosts(channelId, page, perPage);
-    // Posts are returned as an object, need to sort by create_at
-    return Object.values(res.posts).sort((a, b) => a.create_at - b.create_at);
+    try {
+      const res = await this.client.getPosts(channelId, page, perPage);
+      return Object.values(res.posts).sort((a, b) => a.create_at - b.create_at);
+    } catch (err) {
+      console.error('[MattermostService] getPosts failed:', err);
+      throw err;
+    }
   }
 
   /**
@@ -221,18 +236,98 @@ export class MattermostService {
    * Fetch all user profiles for members of a channel
    */
   async getChannelMemberProfiles(channelId: string) {
-    // Get member objects (contains user_id)
-    const members = await this.client.getChannelMembers(channelId);
-    // Fetch each user's profile
-    const profiles = await Promise.all(
-      members.map((m: any) => this.client.getUser(m.user_id))
-    );
-    return profiles;
+    try {
+      // Get member objects (contains user_id)
+      const members = await this.client.getChannelMembers(channelId);
+      // Fetch each user's profile
+      const profiles = await Promise.all(
+        members.map((m: any) => this.client.getUser(m.user_id))
+      );
+      return profiles;
+    } catch (err) {
+      console.error('[MattermostService] getChannelMemberProfiles failed:', err);
+      throw err;
+    }
   }
 
   /**
    * TODO: Implement real-time event subscription using the correct websocket API for @mattermost/client
    */
+
+  /**
+   * Edit a message (post) in a channel
+   */
+  async editMessage(postId: string, newContent: string): Promise<Post> {
+    if (!this.token) throw new Error('Not authenticated');
+    const url = `${serverUrl}/api/v4/posts/${postId}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`,
+      },
+      body: JSON.stringify({ id: postId, message: newContent }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  /**
+   * Delete a message (post) in a channel
+   */
+  async deleteMessage(postId: string): Promise<void> {
+    if (!this.token) throw new Error('Not authenticated');
+    const url = `${serverUrl}/api/v4/posts/${postId}`;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+      },
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
+
+  /**
+   * Add a reaction to a post
+   */
+  async addReaction(postId: string, emoji: string): Promise<void> {
+    if (!this.token || !this.userId) throw new Error('Not authenticated');
+    const url = `${serverUrl}/api/v4/reactions`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`,
+      },
+      body: JSON.stringify({ user_id: this.userId, post_id: postId, emoji_name: emoji }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
+
+  /**
+   * Remove a reaction from a post
+   */
+  async removeReaction(postId: string, emoji: string): Promise<void> {
+    if (!this.token || !this.userId) throw new Error('Not authenticated');
+    const url = `${serverUrl}/api/v4/users/${this.userId}/posts/${postId}/reactions/${emoji}`;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+      },
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
+
+  /**
+   * Acknowledge (mark as read) a post (if supported by server)
+   * This is a placeholder; Mattermost does not have a direct read receipt API for posts, but you can implement channel-level read tracking if needed.
+   */
+  async acknowledgeMessage(postId: string): Promise<void> {
+    // No-op: Mattermost does not support per-post read receipts via API as of 2024
+    // You may want to implement channel-level read tracking here if needed
+    return;
+  }
 
   /**
    * Extract a user-friendly error message from a Mattermost API error
@@ -249,4 +344,14 @@ export class MattermostService {
   }
 }
 
-export const mattermostService = new MattermostService(); 
+export const mattermostService = new MattermostService();
+
+function handleMattermostError(err: any) {
+  if (!err) return;
+  const status = err.status || err?.response?.status;
+  if (status === 401 || status === 403 || (err.message && (err.message.includes('401') || err.message.includes('403')))) {
+    authService.logout();
+    toast.error('Session expired. Please log in again.');
+    window.location.href = '/auth/login';
+  }
+} 

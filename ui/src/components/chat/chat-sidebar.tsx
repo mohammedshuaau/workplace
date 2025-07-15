@@ -23,6 +23,7 @@ interface ChatSidebarProps {
     onChatSelect: (chatId: string) => void
     onNewChat?: () => void
     onRefresh?: () => void
+    onDestroyDb?: () => void
     showConnectionStatus?: boolean
     connectionStatus?: 'connecting' | 'online' | 'offline' | 'syncing';
 }
@@ -33,6 +34,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     onChatSelect,
     onNewChat,
     onRefresh,
+    onDestroyDb,
     showConnectionStatus = false,
     connectionStatus = 'online',
 }) => {
@@ -71,6 +73,28 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                                 className="h-8 w-8 p-0"
                             >
                                 <Plus className="h-4 w-4" />
+                            </Button>
+                        )}
+                        {onRefresh && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onRefresh}
+                                className="h-8 w-8 p-0"
+                                title="Sync Chats"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                        )}
+                        {onDestroyDb && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onDestroyDb}
+                                className="h-8 w-8 p-0"
+                                title="Destroy PouchDB (Debug)"
+                            >
+                                <WifiOff className="h-4 w-4" />
                             </Button>
                         )}
 

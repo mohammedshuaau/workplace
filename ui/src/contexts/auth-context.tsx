@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useMe } from '@/services/auth';
 import type { User, MattermostAuth } from '@/types/auth';
 import { mattermostService } from '@/services/mattermost';
+import { toast } from 'sonner';
 
 interface AuthContextType {
     user: User | null;
@@ -79,8 +80,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             localStorage.removeItem('mattermost');
             setUser(null);
             setMattermost(null);
+            toast.error('Session expired. Please log in again.');
         }
     }, [meData, meError]);
+
+    // Set Mattermost auth for API and WebSocket whenever it changes
+    useEffect(() => {
+        if (mattermost) {
+            mattermostService.setAuth(mattermost);
+        }
+    }, [mattermost]);
 
     const login = (token: string, userData: User, mattermostData?: MattermostAuth) => {
         localStorage.setItem('token', token);

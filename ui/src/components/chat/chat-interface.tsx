@@ -94,6 +94,7 @@ interface ChatInterfaceProps {
     onTyping?: (isTyping: boolean) => Promise<void>
     onNewChat?: () => void
     onRefresh?: () => void
+    onDestroyDb?: () => void
     showConnectionStatus?: boolean
     onRetry?: (chatId: string, tempId: string, content: string) => void;
     onCancel?: (chatId: string, tempId: string) => void;
@@ -112,6 +113,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onTyping,
     onNewChat,
     onRefresh,
+    onDestroyDb,
     showConnectionStatus = false,
     onRetry,
     onCancel,
@@ -401,6 +403,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 onChatSelect={onChatSelect}
                 onNewChat={onNewChat}
                 onRefresh={onRefresh}
+                onDestroyDb={onDestroyDb}
                 showConnectionStatus={showConnectionStatus}
                 connectionStatus={connectionStatus}
             />
